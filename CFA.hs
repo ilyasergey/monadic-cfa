@@ -69,21 +69,32 @@ arg (Lam l, ρ, σ) = Set.singleton (Clo (l, ρ))
  -- k-CFA-style allocation.
 k = 1
 
-tick_Call :: (Val,Σ) -> Time
-tick_Call (_,(call,_,_,t)) = take k (call:t)
+tick :: (Val,Σ) -> Time
+tick (_,(call,_,_,t)) = take k (call:t)
 
-alloc_Call :: (Var, Time, Val, Σ) -> Addr
-alloc_Call (v, t', proc, ς) = (v,t')
+alloc :: (Var, Time, Val, Σ) -> Addr
+alloc (v, t', proc, ς) = (v,t')
 
  -- Transition.
 next :: Σ -> [Σ]
 next ς@(Call f aes, ρ, σ, t) = [ (call, ρ'', σ', t') |
     proc@(Clo (vs :=> call, ρ')) <- Set.toList (arg (f, ρ, σ)),
-    let t'  = tick_Call (proc, ς),
-    let as  = [ alloc_Call(v, t', proc, ς) | v <- vs],
+    let t'  = tick (proc, ς),
+    let as  = [ alloc (v, t', proc, ς) | v <- vs],
     let ds  = [ arg(ae, ρ, σ) | ae <- aes ],
     let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ],
     let σ'  = σ  ⨆  [ a ==> d | a <- as | d <- ds ] ]
+
+mnext :: Σ -> [Σ]
+mnext ς@(Call f aes, ρ, σ, t) = do
+ proc@(Clo (vs :=> call, ρ')) <- Set.toList (arg (f, ρ, σ))
+ let t'  = tick (proc, ς)
+ let as  = [ alloc (v, t', proc, ς) | v <- vs]
+ let ds  = [ arg(ae, ρ, σ) | ae <- aes ]
+ let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]
+ let σ'  = σ  ⨆  [ a ==> d | a <- as | d <- ds ] 
+ return $ (call, ρ'', σ', t') 
+
 
 
 main :: IO ()

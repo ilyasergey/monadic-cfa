@@ -50,9 +50,9 @@ f !! k = Map.findWithDefault bot k f
 
 
  -- State-space.
-data Σ = Eval Ctx Store
+data Σ = Eval PΣ  Store
   deriving (Eq,Ord)
-type Ctx = (CExp, Env, Time)
+type PΣ = (CExp, Env, Time)
 type Env = Var :-> Addr
 type Store = Addr :-> D
 type D = ℙ Val
@@ -72,7 +72,7 @@ class Monad m => Analysis m where
   ($=) :: Addr -> D -> m ()
  
   alloc :: Time -> Var -> m Addr
-  tick :: (Ctx,Time) -> m Time
+  tick :: Val -> PΣ -> m Time
 
  -- class Monad m where
  --   (>>=) :: m a -> (a -> m b) -> m b
@@ -96,8 +96,7 @@ k = 1
 
 instance Monad KCFA where
   (>>=) (KCFA f) g = KCFA (\ σ ->
-     let chs = f(σ)
-      in concatMap (\ (a, σ') -> (kf $ g(a))(σ')) chs)
+    concatMap (\ (a, σ') -> (kf $ g(a))(σ')) (f(σ)))
   return a = KCFA (\ σ -> [(a,σ)])
 
 
@@ -120,14 +119,14 @@ instance Analysis KCFA where
 
   alloc t' v = KCFA (\ σ -> [(Bind v t', σ)])
 
-  tick ((call, ρ, _),CallSeq t) = KCFA (\ σ ->
+  tick clo (call, ρ, CallSeq t) = KCFA (\ σ ->
     [(CallSeq (take k (call:t)), σ)])
 
 
-mnext :: (Analysis m) => (CExp,Env,Time) -> m (CExp,Env,Time)
-mnext ctx@(Call f aes, ρ, t) = do  
-  clo@(Clo (vs :=> call', ρ')) <- fun ρ f
-  t' <- tick(ctx,t)  
+mnext :: (Analysis m) => PΣ -> m PΣ
+mnext ps@(Call f aes, ρ, t) = do  
+  proc@(Clo (vs :=> call', ρ')) <- fun ρ f
+  t' <- tick proc ps
   as <- mapM (alloc t') vs
   ds <- mapM (arg ρ) aes 
   let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]

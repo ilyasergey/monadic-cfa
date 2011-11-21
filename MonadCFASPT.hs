@@ -50,9 +50,9 @@ f !! k = Map.findWithDefault bot k f
 
 
  -- State-space.
-data Σ = Eval Ctx Store
+data Σ = Eval PΣ Store Time
   deriving (Eq,Ord)
-type Ctx = (CExp, Env, Time)
+type PΣ = (CExp, Env)
 type Env = Var :-> Addr
 type Store = Addr :-> D
 type D = ℙ Val
@@ -71,8 +71,8 @@ class Monad m => Analysis m where
 
   ($=) :: Addr -> D -> m ()
  
-  alloc :: Time -> Var -> m Addr
-  tick :: (Ctx,Time) -> m Time
+  alloc :: Var -> m Addr
+  tick :: Val -> PΣ -> m ()
 
  -- class Monad m where
  --   (>>=) :: m a -> (a -> m b) -> m b
@@ -82,9 +82,7 @@ class Monad m => Analysis m where
 
 
 
-data Exact a = Exact !(Store -> (a,Store))
-data KCFA a = KCFA { kf :: !(Store -> [(a,Store)]) }
-
+data KCFA a = KCFA { kf :: !((Store,Time) -> [(a,Store,Time)]) }
 
 k = 1
 
@@ -95,44 +93,44 @@ k = 1
 
 
 instance Monad KCFA where
-  (>>=) (KCFA f) g = KCFA (\ σ ->
-     let chs = f(σ)
-      in concatMap (\ (a, σ') -> (kf $ g(a))(σ')) chs)
-  return a = KCFA (\ σ -> [(a,σ)])
+  (>>=) (KCFA f) g = KCFA (\ (σ,t) ->
+     let chs = f(σ,t)
+      in concatMap (\ (a,σ',t') -> (kf $ g(a))(σ',t')) chs)
+  return a = KCFA (\ (σ,t) -> [(a,σ,t)])
 
 
 instance Analysis KCFA where
-  fun ρ (Lam l) = KCFA (\ σ ->
+  fun ρ (Lam l) = KCFA (\ (σ,t) ->
     let proc = Clo(l, ρ) 
-     in [ (proc,σ) ])
-  fun ρ (Ref v) = KCFA (\ σ -> 
+     in [ (proc,σ,t) ])
+  fun ρ (Ref v) = KCFA (\ (σ,t) -> 
     let procs = σ!(ρ!v)
-     in [ (proc,σ) | proc <- Set.toList procs ])
+     in [ (proc,σ,t) | proc <- Set.toList procs ])
 
-  arg ρ (Lam l) = KCFA (\ σ ->
+  arg ρ (Lam l) = KCFA (\ (σ,t) ->
     let proc = Clo(l, ρ) 
-     in [ (Set.singleton proc, σ) ])
-  arg ρ (Ref v) = KCFA (\ σ -> 
+     in [ (Set.singleton proc, σ, t) ])
+  arg ρ (Ref v) = KCFA (\ (σ,t) -> 
     let procs = σ!(ρ!v)
-     in [ (procs, σ) ])
+     in [ (procs, σ, t) ])
 
-  a $= d = KCFA (\ σ -> [((),σ ⨆ [a ==> d])])
+  a $= d = KCFA (\ (σ,t) -> [((),σ ⨆ [a ==> d],t)] )
 
-  alloc t' v = KCFA (\ σ -> [(Bind v t', σ)])
+  alloc v = KCFA (\ (σ,t) -> [(Bind v t, σ, t)])
 
-  tick ((call, ρ, _),CallSeq t) = KCFA (\ σ ->
-    [(CallSeq (take k (call:t)), σ)])
+  tick clo (call, ρ) = KCFA (\ (σ,CallSeq t) ->
+    [((), σ, CallSeq (take k (call:t)))])
 
 
-mnext :: (Analysis m) => (CExp,Env,Time) -> m (CExp,Env,Time)
-mnext ctx@(Call f aes, ρ, t) = do  
-  clo@(Clo (vs :=> call', ρ')) <- fun ρ f
-  t' <- tick(ctx,t)  
-  as <- mapM (alloc t') vs
+mnext :: (Analysis m) => PΣ -> m PΣ
+mnext ps@(Call f aes, ρ) = do  
+  proc@(Clo (vs :=> call', ρ')) <- fun ρ f
+  tick proc ps
+  as <- mapM alloc vs
   ds <- mapM (arg ρ) aes 
   let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]
   sequence [ a $= d | a <- as | d <- ds ]
-  return $! (call', ρ'', t')
+  return $! (call', ρ'')
 
 
 
