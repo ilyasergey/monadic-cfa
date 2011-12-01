@@ -242,7 +242,7 @@ data D = Val (Obj Addr)
 
 -- Used EXACTLY the same monad as for KCFA in Lambda
 
-data KCFA a = KCFA { kf :: !((Time, State Addr, AStore) -> [(a, Time, State Addr, AStore)]) }
+data KCFA a = KCFA { kf :: !((Time, AStore) -> [(a, Time, AStore)]) }
 
 --TODO is it possible to abstract over the list structure?
 type D1 = (ℙ D)
@@ -252,36 +252,36 @@ type AStore = Addr :-> D1
 k = 1
 
 instance Monad KCFA where
-   return a = KCFA (\(t, s, σ) -> [(a, t, s, σ)]) 
-   (>>=) (KCFA f) g = KCFA (\ (t, s, σ) ->
-     let chs = f(t, s, σ)
-      in concatMap (\ (a, t', s', σ') -> (kf $ g(a))(t', s', σ')) chs)
+   return a = KCFA (\(t, σ) -> [(a, t, σ)]) 
+   (>>=) (KCFA f) g = KCFA (\ (t, σ) ->
+     let chs = f(t, σ)
+      in concatMap (\ (a, t', σ') -> (kf $ g(a))(t', σ')) chs)
 
 instance JavaSemanticInterface KCFA Addr where
-  tick ctx@(stmts, _, _) = KCFA (\(t, s, σ) -> [((), take k ((lab (head stmts)):t), ctx, σ)])
+  tick ctx@(stmts, _, _) = KCFA (\(t, σ) -> [((), take k ((lab (head stmts)):t), σ)])
   
-  getObj β v = KCFA (\(t, s, σ) -> 
-               [(d, t, s, σ) | Val d <- Set.toList $ σ!(β!v)])
+  getObj β v = KCFA (\(t, σ) -> 
+               [(d, t, σ) | Val d <- Set.toList $ σ!(β!v)])
 
-  putObj β v d = KCFA (\(t, s, σ) -> 
-                 [((), t, s, σ ⊎ [(β!v) ==> (Set.singleton (Val d))])])
+  putObj β v d = KCFA (\(t, σ) -> 
+                 [((), t, σ ⊎ [(β!v) ==> (Set.singleton (Val d))])])
 
-  getCont pk = KCFA (\(t, s, σ) -> 
-               [(κ, t, s, σ) | Cont κ <- Set.toList $ σ ! pk])
+  getCont pk = KCFA (\(t, σ) -> 
+               [(κ, t, σ) | Cont κ <- Set.toList $ σ ! pk])
 
-  putCont m κ = KCFA (\(t, s, σ) -> 
+  putCont m κ = KCFA (\(t, σ) -> 
                 let b = alloc_k t m in
-                [(b, t, s, σ ⊎ [b ==> (Set.singleton (Cont κ))])])
+                [(b, t, σ ⊎ [b ==> (Set.singleton (Cont κ))])])
 
-  initBEnv β vs'' vs''' = KCFA (\(t, s, σ) -> 
+  initBEnv β vs'' vs''' = KCFA (\(t, σ) -> 
                            let pairs' = map (\v -> (v, alloc t v)) vs''
                                pairs'' = map (\v -> (v, alloc t v)) vs''' in
                            let β' = β // pairs' // pairs'' in
-                           [(β', t, s, σ)])
+                           [(β', t, σ)])
 
-  getC cn  = KCFA (\(t, s, σ) ->  
+  getC cn  = KCFA (\(t, σ) ->  
              -- updates a store and returns an environment of all class fields
-             let ructor = (\ds -> KCFA(\(t', s', σ') -> 
+             let ructor = (\ds -> KCFA(\(t', σ') -> 
                    let fs = allFields ?table cn -- compute all fields
                        as = map (alloc t) fs    -- appropriate addresses for fields
                        fBindings = zip fs as    -- bindings [field |-> addr]
@@ -291,10 +291,10 @@ instance JavaSemanticInterface KCFA Addr where
                        σ'' = σ' ⊎ [ai ==> (Set.singleton (Val $ fMappings ! fi)) | (fi, ai) <- fBindings]
                        -- new environment is create
                        β' = Map.empty // fBindings
-                    in [(β', t', s', σ'')]))
-             in [(ructor, t, s, σ)])
+                    in [(β', t', σ'')]))
+             in [(ructor, t, σ)])
 
-  getM (cn, _) m = KCFA (\(t, s, σ) -> [(method ?table cn m, t, s, σ)])
+  getM (cn, _) m = KCFA (\(t, σ) -> [(method ?table cn m, t, σ)])
 
 alloc :: Time -> Var -> Addr
 alloc t v = AVar v (take k t)
