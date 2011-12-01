@@ -1,8 +1,12 @@
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE TupleSections #-}
+
 module Main where
--- Should be run with the followinf options:
--- -XTypeOperators -XParallelListComp -XTypeSynonymInstances 
--- -XMultiParamTypeClasses -XScopedTypeVariables -XImplicitParams
--- -XTupleSections
 
 -- Imports.
 import Data.Map as Map hiding (map)
