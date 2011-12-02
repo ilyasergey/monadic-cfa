@@ -1,3 +1,13 @@
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Main where
 
  -- Imports.
@@ -73,7 +83,6 @@ class Monad m => Analysis a m where
   alloc :: Var -> m a
   tick :: (PΣ a) -> m ()
 
-
  -- 
 
 
@@ -129,7 +138,7 @@ instance (Addressable a t, Storable a s)
 
 
  -- Generic transition
-mnext :: (Analysis a m) => (PΣ a)-> m (PΣ a)
+mnext :: (Analysis a m) => (PΣ a) -> m (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
@@ -138,20 +147,6 @@ mnext ps@(Call f aes, ρ) = do
   let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]
   sequence [ a $= d | a <- as | d <- ds ]
   return $! (call', ρ'')
-
-
- -- Abstract state-space exploration algorithm
-explore :: 
-  (Analysis a m, Addressable a t, Storable a s) 
-  => CExp -> ((PΣ a)-> m (PΣ a)) -> [(PΣ a,s,t)]
-explore call =
- let
-  pς0 = (call, ρ0)
-
-  visited :: Set.Set (PΣ a, s, t)
-  visited = Set.empty
- in error "foo"
-
 
 
  -- Example: Concrete Semantics
@@ -191,10 +186,6 @@ instance Analysis CAddr (Concrete CAddr) where
 
   tick (call, ρ) = Concrete (\ (σ,n) -> ((), σ, n+1))
 
-
-
-
-
  -- Example: KCFA from GenericAnalysis
 
 k = 1
@@ -225,11 +216,40 @@ mnext_KCFA :: (PΣ KAddr) ->
  (GenericAnalysis KAddr KTime (Store KAddr)) (PΣ KAddr)
 mnext_KCFA = mnext 
 
-
-
-
 main :: IO ()
 main = do
        return ()
        
 
+-- running the analysis
+
+-- TODO
+-- define `stepAnalysis' function as `runState'
+
+-- initial parameters for the analysis 
+-- (reminiscent to the initial state)
+
+-- Some particular case (bottom for the iteration)
+-- see http://hackage.haskell.org/packages/archive/base/latest/doc/html/Control-Monad-Fix.html#t:MonadFix
+initConfigGF :: (ProcCh KAddr, Store KAddr, KTime)
+initConfigGF = (Just (undefined :: Val KAddr), Map.empty, KCalls [])       
+
+stepAnalysis :: Analysis a (GenericAnalysis a t s) =>
+     (ProcCh a, s, t) -> PΣ a -> [(PΣ a, ProcCh a, s, t)]
+
+stepAnalysis config = \state -> gf (mnext state) $ config
+
+
+-----------------------------
+
+ -- Abstract state-space exploration algorithm
+explore :: 
+  (Analysis a m, Addressable a t, Storable a s) 
+  => CExp -> ((PΣ a)-> m (PΣ a)) -> [(PΣ a,s,t)]
+explore call =
+ let
+  pς0 = (call, ρ0)
+
+  visited :: Set.Set (PΣ a, s, t)
+  visited = Set.empty
+ in error "foo"
