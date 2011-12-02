@@ -14,6 +14,8 @@ module Main where
 import CPS
 import Data.Map as Map
 import Data.Set as Set
+import Data.List as List
+import Control.Monad.Fix
 
  -- Abbreviations.
 type k :-> v = Map.Map k v
@@ -239,17 +241,34 @@ stepAnalysis :: Analysis a (GenericAnalysis a t s) =>
 
 stepAnalysis config = \state -> gf (mnext state) $ config
 
+-- Insight: analysis shouldn't depen on the semanticsc  
+instance MonadFix (GenericAnalysis a t s) where
+  mfix trans = 
+     let iterate = undefined
+         result = undefined
+     in GCFA (\ (ch,σ,t) -> 
+       [(result,ch,σ,t)])
+
 
 -----------------------------
 
  -- Abstract state-space exploration algorithm
 explore :: 
-  (Analysis a m, Addressable a t, Storable a s) 
-  => CExp -> ((PΣ a)-> m (PΣ a)) -> [(PΣ a,s,t)]
-explore call =
- let
-  pς0 = (call, ρ0)
+  (Ord t, Ord s, Analysis a m, Addressable a t, Storable a s) 
+  => (ProcCh a, s, t) -> PΣ a -> Set.Set (PΣ a, ProcCh a, s, t)
+explore initConfig state0 =
+ let 
+  -- fixpoint iteration
+  iterate config worklist visited = 
+    let newStates = worklist >>= (\state -> stepAnalysis config state)
+        -- new states
+        actualNew = List.filter (\elem -> Set.member elem visited) newStates 
+        in if List.null actualNew
+           then visited -- fixpoint reached
+           else let newVisited = visited ⊔ (Set.fromList actualNew)
+                    newConfig = undefined -- merge new configs
+                    newWorkList = List.map (\(st, ch, σ, t) -> st) actualNew 
+                in iterate newConfig newWorkList newVisited
 
-  visited :: Set.Set (PΣ a, s, t)
-  visited = Set.empty
- in error "foo"
+ in iterate initConfig [state0] Set.empty
+
