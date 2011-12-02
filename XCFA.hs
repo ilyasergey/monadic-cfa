@@ -244,11 +244,11 @@ stepAnalysis config = \state -> gf (mnext state) $ config
 -- Insight: analysis shouldn't depen on the semanticsc  
 instance MonadFix (GenericAnalysis a t s) where
   mfix trans = 
-     let iterate = undefined
-         result = undefined
-     in GCFA (\ (ch,σ,t) -> 
-       [(result,ch,σ,t)])
-
+     let state0 = undefined -- how to obtain it ?!!
+     in (return state0) -- iteration zero: return initial state
+        >>= trans 
+        >>= trans 
+        >>= trans -- and so on...
 
 -----------------------------
 
@@ -272,3 +272,9 @@ explore initConfig state0 =
 
  in iterate initConfig [state0] Set.empty
 
+
+{-
+Perhaps, introduce pre- and post-transition procedurec for fixpoint-}
+{-computation management.
+
+-}
