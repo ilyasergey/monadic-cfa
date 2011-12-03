@@ -76,14 +76,16 @@ type Store a = a :-> (D a)
 
 
  -- Abstract analysis interface.
-class Monad m => Analysis a m where
-  fun :: (Env a)-> AExp -> m (Val a)
-  arg :: (Env a)-> AExp -> m (D a)
+class Monad (m g) => Analysis a g m where
+  fun :: (Env a) -> AExp -> m g (Val a)
+  arg :: (Env a) -> AExp -> m g (D a)
 
-  ($=) :: a -> (D a) -> m ()
+  ($=) :: a -> (D a) -> m g ()
  
-  alloc :: Var -> m a
-  tick :: (PΣ a) -> m ()
+  alloc :: Var -> m g a
+  tick :: (PΣ a) -> m g ()
+
+  stepAnalysis :: g -> PΣ a -> [(PΣ a, g)]
 
  -- 
 
@@ -104,43 +106,46 @@ class (Ord a, Eq a) => Addressable a t where
   advance :: Val a -> PΣ a -> t -> t 
   
 
-data GenericAnalysis a t s b = GCFA {
-  gf :: (ProcCh a,s,t) -> [(b,ProcCh a,s,t)]
+data GenericAnalysis a g b = GCFA {
+  gf :: g -> [(b, g)]
 }
 
-instance Monad (GenericAnalysis a t s) where
-  (>>=) (GCFA f) g = GCFA (\ (ch,σ,t) ->
-    concatMap (\ (a,ch,σ',t') -> (gf $ g(a))(ch,σ',t')) (f(ch,σ,t)))
-  return a = GCFA (\ (ch,σ,t) -> [(a,ch,σ,t)])
+instance Monad (GenericAnalysis a g) where
+  (>>=) (GCFA f) g = GCFA (\ guts ->
+    concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
+  return a = GCFA (\ guts -> [(a,guts)])
 
 
+--  (GenericAnalysis KAddr KTime (Store KAddr))
 instance (Addressable a t, Storable a s) 
-   => Analysis a (GenericAnalysis a t s) where
+   => Analysis a 
+               (ProcCh a, s, t) -- Generic Analysis' guts
+      (GenericAnalysis a) where
   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
     let proc = Clo(l, ρ) 
-     in [ (proc,Just proc,σ,t) ])
+     in [ (proc, (Just proc,σ,t)) ])
   fun ρ (Ref v) = GCFA (\ (_,σ,t) -> 
     let procs = fetch σ (ρ!v)
-     in [ (proc,Just proc,σ,t) | proc <- Set.toList procs ]) 
+     in [ (proc, (Just proc,σ,t)) | proc <- Set.toList procs ]) 
 
   arg ρ (Lam l) = GCFA (\ (ch,σ,t) ->
     let proc = Clo(l, ρ) 
-     in [ (Set.singleton proc, ch, σ, t) ])
+     in [ (Set.singleton proc, (ch, σ, t)) ])
   arg ρ (Ref v) = GCFA (\ (ch,σ,t) -> 
     let procs = fetch σ (ρ!v)
-     in [ (procs, ch, σ, t) ])
+     in [ (procs, (ch, σ, t)) ])
 
-  a $= d = GCFA (\ (ch,σ,t) -> [((),ch,bind σ a d,t)] )
+  a $= d = GCFA (\ (ch,σ,t) -> [((),(ch,bind σ a d,t))] )
 
-  alloc v = GCFA (\ (ch,σ,t) -> [(valloc v t, ch, σ, t)])
+  alloc v = GCFA (\ (ch,σ,t) -> [(valloc v t, (ch, σ, t))])
 
   tick ps = GCFA (\ (Just proc, σ, t) ->
-     [((), Just proc, σ, advance proc ps t)])
+     [((), (Just proc, σ, advance proc ps t))])
 
 
 
  -- Generic transition
-mnext :: (Analysis a m) => (PΣ a) -> m (PΣ a)
+mnext :: (Analysis a g m) => (PΣ a) -> m g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
@@ -153,21 +158,23 @@ mnext ps@(Call f aes, ρ) = do
 
  -- Example: Concrete Semantics
 
-data Concrete a b = 
+-- Need to pass an unused type parameter `g' for "guts"
+data Concrete a g b = 
  Concrete { cf :: (Store a,Int) -> (b,Store a,Int) }
 
 data CAddr = CBind Var Int
   deriving (Eq,Ord)
 
-
-instance Monad (Concrete CAddr) where
+instance Monad (Concrete CAddr g) where
   (>>=) (Concrete f) g = Concrete (\ (σ,t) ->
     let (a, σ', t') = f(σ,t)
      in (cf $ g(a))(σ',t'))
   return a = Concrete (\ (σ,t) -> (a,σ,t))
 
 
-instance Analysis CAddr (Concrete CAddr) where
+instance Analysis CAddr 
+                  (Store CAddr, Int) 
+         (Concrete CAddr) where
   fun ρ (Lam l) = Concrete (\ (σ,t) -> 
     let proc = Clo(l, ρ)
      in (proc,σ,t))
@@ -213,9 +220,8 @@ instance Storable KAddr (Store KAddr) where
  fetch σ a = σ Main.!! a  
  replace σ a d = σ ⨆ [a ==> d]
 
-
-mnext_KCFA :: (PΣ KAddr) ->
- (GenericAnalysis KAddr KTime (Store KAddr)) (PΣ KAddr)
+mnext_KCFA :: Analysis KAddr g m =>
+              (PΣ KAddr) -> m g (PΣ KAddr)
 mnext_KCFA = mnext 
 
 main :: IO ()
@@ -233,16 +239,15 @@ main = do
 
 -- Some particular case (bottom for the iteration)
 -- see http://hackage.haskell.org/packages/archive/base/latest/doc/html/Control-Monad-Fix.html#t:MonadFix
-initConfigGF :: (ProcCh KAddr, Store KAddr, KTime)
-initConfigGF = (Just (undefined :: Val KAddr), Map.empty, KCalls [])       
 
-stepAnalysis :: Analysis a (GenericAnalysis a t s) =>
-     (ProcCh a, s, t) -> PΣ a -> [(PΣ a, ProcCh a, s, t)]
+--initConfigGF :: (ProcCh KAddr, Store KAddr, KTime)
+initConfigGF state = undefined 
+--(state, Just (undefined :: Val KAddr), Map.empty, KCalls [])       
 
-stepAnalysis config = \state -> gf (mnext state) $ config
+--stepAnalysis config = \state -> gf (mnext state) $ config
 
 -- Insight: analysis shouldn't depen on the semanticsc  
-instance MonadFix (GenericAnalysis a t s) where
+instance MonadFix (GenericAnalysis a g) where
   mfix trans = 
      let state0 = undefined -- how to obtain it ?!!
      in (return state0) -- iteration zero: return initial state
@@ -253,28 +258,31 @@ instance MonadFix (GenericAnalysis a t s) where
 -----------------------------
 
  -- Abstract state-space exploration algorithm
-explore :: 
-  (Ord t, Ord s, Analysis a m, Addressable a t, Storable a s) 
-  => (ProcCh a, s, t) -> PΣ a -> Set.Set (PΣ a, ProcCh a, s, t)
-explore initConfig state0 =
- let 
-  -- fixpoint iteration
-  iterate config worklist visited = 
-    let newStates = worklist >>= (\state -> stepAnalysis config state)
-        -- new states
-        actualNew = List.filter (\elem -> Set.member elem visited) newStates 
-        in if List.null actualNew
-           then visited -- fixpoint reached
-           else let newVisited = visited ⊔ (Set.fromList actualNew)
-                    newConfig = undefined -- merge new configs
-                    newWorkList = List.map (\(st, ch, σ, t) -> st) actualNew 
-                in iterate newConfig newWorkList newVisited
+-- explore :: 
+--   (Ord t, Ord s, Analysis a m, Addressable a t, Storable a s) 
+--   => PΣ a -> Set.Set (PΣ a, ProcCh a, s, t)
+-- explore state0 =
+--  let 
+--   -- fixpoint iteration
+--   iterate :: [(PΣ a, ProcCh a, s, t)] -> 
+--              Set.Set (PΣ a, ProcCh a, s, t) -> 
+--              Set.Set (PΣ a, ProcCh a, s, t) 
+--   iterate worklist visited = 
+--     let newStates = worklist >>= (\(state, ch, s, t) -> 
+--                                    stepAnalysis (ch, s, t) state)
+--         -- new states
+--         newWorkList = List.filter (\elem -> Set.member elem visited) newStates 
+--         in if List.null newWorkList
+--            then visited -- fixpoint reached
+--            else let newVisited = visited ⊔ (Set.fromList newWorkList)
+--                 in iterate newWorkList newVisited
 
- in iterate initConfig [state0] Set.empty
+--  in iterate [(initConfigGF state0)] Set.empty
 
 
 {-
-Perhaps, introduce pre- and post-transition procedurec for fixpoint-}
-{-computation management.
+
+1. Perhaps, introduce pre- and post-transition procedurec for fixpoint
+computation management.
 
 -}
