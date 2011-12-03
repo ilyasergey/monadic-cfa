@@ -11,6 +11,8 @@ import Data.Set as Set
 import Data.List as List
 import Control.Monad.Fix
 
+import Debug.Trace
+
  -- Abbreviations.
 type k :-> v = Map.Map k v
 type ℙ a = Set.Set a
@@ -90,7 +92,22 @@ class Monad (m g) => Analysis a g m | g->m, g->a where
   stepAnalysis :: g -> PΣ a -> [(PΣ a, g)]
   inject :: CExp -> (PΣ a, g)
 
+-- Generic transition
+mnext :: Analysis a g m => (PΣ a) -> m g (PΣ a)
+mnext ps@(Call f aes, ρ) = do  
+  proc@(Clo (vs :=> call', ρ')) <- fun ρ f
+  tick ps
+  as <- mapM alloc vs
+  ds <- mapM (arg ρ) aes 
+  let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]
+  sequence [ a $= d | a <- as | d <- ds ]
+  return $! (call', ρ'')
+mnext ps@(Exit, ρ) = return $! ps
+
+----------------------------------------------------------------------
  -- Generic analysis.
+----------------------------------------------------------------------
+
 type ProcCh a = Maybe (Val a) -- Nondeterministic choice.
 
 class Storable a s where
@@ -105,7 +122,7 @@ class (Ord a, Eq a) => Addressable a t where
   valloc :: Var -> t -> a 
   advance :: Val a -> PΣ a -> t -> t 
   
--- GenericAnalysis :: * -> * -> *
+ -- GenericAnalysis :: * -> * -> *
 data GenericAnalysis g b = GCFA {
   gf :: g -> [(b, g)]
 }
@@ -144,23 +161,11 @@ instance (Addressable a t, Storable a s)
      [((), (Just proc, σ, advance proc ps t))])
 
   stepAnalysis config state = gf (mnext state) $ config
-  
- -- Generic transition
-mnext :: Analysis a g m => (PΣ a) -> m g (PΣ a)
-mnext ps@(Call f aes, ρ) = do  
-  proc@(Clo (vs :=> call', ρ')) <- fun ρ f
-  tick ps
-  as <- mapM alloc vs
-  ds <- mapM (arg ρ) aes 
-  let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]
-  sequence [ a $= d | a <- as | d <- ds ]
-  return $! (call', ρ'')
 
-
+----------------------------------------------------------------------  
  -- Example: Concrete Semantics
+----------------------------------------------------------------------
 
--- Need to pass an unused type parameter `g' for "guts"
--- Problem: no dependency between "a" and "g" is captured
 data Concrete g b = Concrete { 
     cf :: g -> (b, g)}
 
@@ -200,8 +205,9 @@ instance Analysis CAddr
 
   inject call = ((call, Map.empty), (bot, 0))
                 
-
+----------------------------------------------------------------------
  -- Example: KCFA from GenericAnalysis
+----------------------------------------------------------------------
 
 k = 1
 
@@ -226,30 +232,15 @@ instance Storable KAddr (Store KAddr) where
  fetch σ a = σ Main.!! a  
  replace σ a d = σ ⨆ [a ==> d]
 
--- running the analysis
-
--- initial parameters for the analysis 
--- (reminiscent to the initial state)
-
-
--- Some particular case (bottom for the iteration)
--- see http://hackage.haskell.org/packages/archive/base/latest/doc/html/Control-Monad-Fix.html#t:MonadFix
-
--- Insight: analysis shouldn't depen on the semanticsc  
--- instance MonadFix (GenericAnalysis g) where
---   mfix trans = 
---      let state0 = undefined -- how to obtain it ?!!
---      in (return state0) -- iteration zero: return initial state
---         >>= trans 
---         >>= trans 
---         >>= trans -- and so on...
-
------------------------------
+----------------------------------------------------------------------
+ -- running the analysis
+----------------------------------------------------------------------
 
  -- Abstract state-space exploration algorithm
-loop :: (Analysis a g m, Ord a, Ord g) =>
+loop :: (Analysis a g m, Ord a, Ord g, Show a, Show g) =>
         [(PΣ a, g)] -> Set (PΣ a, g) -> Set (PΣ a, g)
 loop worklist visited = 
+  trace ("Worklist:\n" ++ show worklist ++ "\n") $
   let newStates = worklist >>= (\(state, config) -> 
                                  stepAnalysis config state)
       newWorkList = List.filter (\elem -> not (Set.member elem visited)) newStates 
@@ -259,13 +250,16 @@ loop worklist visited =
             in loop newWorkList newVisited
 
 -- compute an approximation
-explore :: (Analysis a g m, Ord a, Ord g) => CExp -> Set (PΣ a, g)
+explore :: (Analysis a g m, Ord a, Ord g, Show a, Show g) => CExp -> Set (PΣ a, g)
 explore program = loop [inject program] Set.empty
 
+----------------------------------------------------------------------
 -- example program
--- ((λ (f g) (f g)) (λ (x) x) (λ (y) y))
+----------------------------------------------------------------------
+
+-- ((λ (f g) (f g)) (λ (x) x) (λ (y) Exit))
 idx  = Lam (["x"] :=> Call (Ref "x") [])
-idy  = Lam (["y"] :=> Call (Ref "y") [])
+idy  = Lam (["y"] :=> Exit)
 comb = Lam (["f", "g"] :=> Call (Ref "f") [Ref "g"])
 ex1  = Call comb [idx, idy]
 
