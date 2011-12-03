@@ -75,6 +75,9 @@ type Store a = a :-> (D a)
 
  -- Abstract analysis interface.
  -- Type parameter "g" is for guts and is passed along
+ -- Address is a part of the Semantic interface
+ -- Not of the analysis!!!
+ -- So `a' parameter should not be in the analysis
 class Monad (m g) => Analysis a g m where
   fun :: (Env a) -> AExp -> m g (Val a)
   arg :: (Env a) -> AExp -> m g (D a)
