@@ -1,12 +1,6 @@
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE ParallelListComp #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Main where
 
@@ -59,14 +53,12 @@ f ⨆ ((k,v):tl) = Map.insertWith (⊔) k v (f ⨆ tl)
 (!!) :: (Ord k, Lattice v) => (k :-> v) -> k -> v
 f !! k = Map.findWithDefault bot k f
 
-
-
  -- State-space.
 type PΣ a = (CExp, Env a)
 type Env a = Var :-> a
 type D a = ℙ (Val a)
 data Val a = Clo (Lambda, Env a)
-  deriving (Eq,Ord)
+  deriving (Eq, Ord, Show)
 
 ρ0 = Map.empty 
 
@@ -75,10 +67,18 @@ type Store a = a :-> (D a)
 
  -- Abstract analysis interface.
  -- Type parameter "g" is for guts and is passed along
- -- Address is a part of the Semantic interface
- -- Not of the analysis!!!
- -- So `a' parameter should not be in the analysis
-class Monad (m g) => Analysis a g m where
+ -- Address is a part of the Semantic interface, but not of the analysis!!!
+ -- So `a' parameter should not be in the analysis, only `g' for guts
+
+ -- Do we really need functional dependencies between variables?
+ -- 1. Indeed, guts define the underlying monad
+ -- 2. Guts define addresses? - Yes, indeed
+ -- !! No more dependencies is needed
+
+ -- TODO: Explain to Matt and Jan the necessity of dependency
+ -- variables, and why is it natural
+ 
+class Monad (m g) => Analysis a g m | g->m, g->a where
   fun :: (Env a) -> AExp -> m g (Val a)
   arg :: (Env a) -> AExp -> m g (D a)
 
@@ -88,6 +88,7 @@ class Monad (m g) => Analysis a g m where
   tick :: (PΣ a) -> m g ()
 
   stepAnalysis :: g -> PΣ a -> [(PΣ a, g)]
+  inject :: CExp -> (PΣ a, g)
 
  -- Generic analysis.
 type ProcCh a = Maybe (Val a) -- Nondeterministic choice.
@@ -104,12 +105,13 @@ class (Ord a, Eq a) => Addressable a t where
   valloc :: Var -> t -> a 
   advance :: Val a -> PΣ a -> t -> t 
   
--- GenericAnalysis :: * -> * -> * -> *
+-- GenericAnalysis :: * -> * -> *
 data GenericAnalysis g b = GCFA {
   gf :: g -> [(b, g)]
 }
 
 -- Curry GenericAnalysis for the given guts
+
 instance Monad (GenericAnalysis g) where
   (>>=) (GCFA f) g = GCFA (\ guts ->
     concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
@@ -119,7 +121,7 @@ instance Monad (GenericAnalysis g) where
 instance (Addressable a t, Storable a s) 
    => Analysis a 
                (ProcCh a, s, t) -- Generic Analysis' guts
-      (GenericAnalysis) where
+               (GenericAnalysis) where
   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
     let proc = Clo(l, ρ) 
      in [ (proc, (Just proc,σ,t)) ])
@@ -142,7 +144,7 @@ instance (Addressable a t, Storable a s)
      [((), (Just proc, σ, advance proc ps t))])
 
   stepAnalysis config state = gf (mnext state) $ config
-
+  
  -- Generic transition
 mnext :: Analysis a g m => (PΣ a) -> m g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
@@ -163,7 +165,7 @@ data Concrete g b = Concrete {
     cf :: g -> (b, g)}
 
 data CAddr = CBind Var Int
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Monad (Concrete g) where
   (>>=) (Concrete f) g = Concrete (\guts ->
@@ -196,6 +198,9 @@ instance Analysis CAddr
 
   stepAnalysis config state = [cf (mnext state) config]
 
+  inject call = ((call, Map.empty), (bot, 0))
+                
+
  -- Example: KCFA from GenericAnalysis
 
 k = 1
@@ -223,59 +228,53 @@ instance Storable KAddr (Store KAddr) where
 
 -- running the analysis
 
--- TODO
--- define `stepAnalysis' function as `runState'
-
 -- initial parameters for the analysis 
 -- (reminiscent to the initial state)
+
 
 -- Some particular case (bottom for the iteration)
 -- see http://hackage.haskell.org/packages/archive/base/latest/doc/html/Control-Monad-Fix.html#t:MonadFix
 
---initConfigGF :: (ProcCh KAddr, Store KAddr, KTime)
-initConfigGF state = undefined 
---(state, Just (undefined :: Val KAddr), Map.empty, KCalls [])       
-
---stepAnalysis :: Analysis a g (Concrete a) => g -> PΣ a -> (PΣ a, g)
---stepAnalysis config state = cf (mnext state) config
-
 -- Insight: analysis shouldn't depen on the semanticsc  
-instance MonadFix (GenericAnalysis g) where
-  mfix trans = 
-     let state0 = undefined -- how to obtain it ?!!
-     in (return state0) -- iteration zero: return initial state
-        >>= trans 
-        >>= trans 
-        >>= trans -- and so on...
+-- instance MonadFix (GenericAnalysis g) where
+--   mfix trans = 
+--      let state0 = undefined -- how to obtain it ?!!
+--      in (return state0) -- iteration zero: return initial state
+--         >>= trans 
+--         >>= trans 
+--         >>= trans -- and so on...
 
 -----------------------------
 
  -- Abstract state-space exploration algorithm
--- explore :: 
---   (Ord t, Ord s, Analysis a m, Addressable a t, Storable a s) 
---   => PΣ a -> Set.Set (PΣ a, ProcCh a, s, t)
--- explore state0 =
---  let 
---   -- fixpoint iteration
---   iterate :: [(PΣ a, ProcCh a, s, t)] -> 
---              Set.Set (PΣ a, ProcCh a, s, t) -> 
---              Set.Set (PΣ a, ProcCh a, s, t) 
---   iterate worklist visited = 
---     let newStates = worklist >>= (\(state, ch, s, t) -> 
---                                    stepAnalysis (ch, s, t) state)
---         -- new states
---         newWorkList = List.filter (\elem -> Set.member elem visited) newStates 
---         in if List.null newWorkList
---            then visited -- fixpoint reached
---            else let newVisited = visited ⊔ (Set.fromList newWorkList)
---                 in iterate newWorkList newVisited
+loop :: (Analysis a g m, Ord a, Ord g) =>
+        [(PΣ a, g)] -> Set (PΣ a, g) -> Set (PΣ a, g)
+loop worklist visited = 
+  let newStates = worklist >>= (\(state, config) -> 
+                                 stepAnalysis config state)
+      newWorkList = List.filter (\elem -> not (Set.member elem visited)) newStates 
+   in if List.null newWorkList
+      then visited
+      else let newVisited = visited ⊔ (Set.fromList newWorkList)
+            in loop newWorkList newVisited
 
---  in iterate [(initConfigGF state0)] Set.empty
+-- compute an approximation
+explore :: (Analysis a g m, Ord a, Ord g) => CExp -> Set (PΣ a, g)
+explore program = loop [inject program] Set.empty
 
+-- example program
+-- ((λ (f g) (f g)) (λ (x) x) (λ (y) y))
+idx  = Lam (["x"] :=> Call (Ref "x") [])
+idy  = Lam (["y"] :=> Call (Ref "y") [])
+comb = Lam (["f", "g"] :=> Call (Ref "f") [Ref "g"])
+ex1  = Call comb [idx, idy]
 
-{-
+result = explore ex1 :: Set (PΣ CAddr, (Store CAddr, Int))
+
+{-----------------------------------------------------------
+More ideas: 
 
 1. Perhaps, introduce pre- and post-transition procedurec for fixpoint
 computation management.
 
--}
+-----------------------------------------------------------}
