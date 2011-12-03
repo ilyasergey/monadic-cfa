@@ -217,8 +217,8 @@ instance Storable KAddr (Store KAddr) where
  fetch σ a = σ Main.!! a  
  replace σ a d = σ ⨆ [a ==> d]
 
-mnext_KCFA :: Analysis KAddr g m =>
-              (PΣ KAddr) -> m g (PΣ KAddr)
+mnext_KCFA :: Analysis a g m =>
+              (PΣ a) -> m g (PΣ a)
 mnext_KCFA = mnext 
 
 main :: IO ()
