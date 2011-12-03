@@ -112,7 +112,6 @@ instance Monad (GenericAnalysis a g) where
     concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
   return a = GCFA (\ guts -> [(a,guts)])
 
-
 -- Instance of the analysis for some particular guts
 instance (Addressable a t, Storable a s) 
    => Analysis a 
@@ -142,7 +141,7 @@ instance (Addressable a t, Storable a s)
 --  stepAnalysis config state = gf (mnext state) $ config
 
  -- Generic transition
-mnext :: (Analysis a g m) => (PΣ a) -> m g (PΣ a)
+mnext :: Analysis a g m => (PΣ a) -> m g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
@@ -162,7 +161,7 @@ data Concrete a g b =
 data CAddr = CBind Var Int
   deriving (Eq,Ord)
 
-instance Monad (Concrete CAddr g) where
+instance Monad (Concrete a g) where
   (>>=) (Concrete f) g = Concrete (\guts ->
     let (a, guts') = f guts
      in (cf $ g(a)) guts')
@@ -216,15 +215,6 @@ instance Storable KAddr (Store KAddr) where
  bind σ a d = σ ⨆ [a ==> d]
  fetch σ a = σ Main.!! a  
  replace σ a d = σ ⨆ [a ==> d]
-
-mnext_KCFA :: Analysis a g m =>
-              (PΣ a) -> m g (PΣ a)
-mnext_KCFA = mnext 
-
-main :: IO ()
-main = do
-       return ()
-       
 
 -- running the analysis
 
