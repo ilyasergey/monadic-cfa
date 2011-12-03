@@ -149,7 +149,7 @@ instance Analysis CAddr
   inject call = ((call, Map.empty), (bot, 0))               
 
 ----------------------------------------------------------------------
- -- Generic analysis.
+ -- Addresses, Stores and Choices
 ----------------------------------------------------------------------
 
 type ProcCh a = Maybe (Val a) -- Nondeterministic choice.
@@ -168,6 +168,10 @@ class Storable a s | s->a where
   bind :: s -> a -> (D a)-> s
   replace :: s -> a -> (D a) -> s
   fetch :: s -> a -> (D a)
+
+----------------------------------------------------------------------
+ -- Generic analysis.
+----------------------------------------------------------------------
   
 -- GenericAnalysis :: * -> * -> *
 -- parametrized by guts and passed result
@@ -210,6 +214,55 @@ instance (Addressable a t, Storable a s)
   stepAnalysis config state = gf (mnext state) $ config
 
   inject call = ((call, Map.empty), (Nothing, σ0, τ0))
+
+----------------------------------------------------------------------
+ -- Single store-threading analysis.
+----------------------------------------------------------------------
+  
+-- GenericAnalysis :: * -> * -> *
+-- parametrized by guts and passed result
+data SingleStoreAnalysis st g b = SSFA {
+  ssf :: st -> g -> (st, [(b, g)])
+}
+
+-- Curry GenericAnalysis for the fixed guts
+instance Monad (SingleStoreAnalysis st g) where
+  (>>=) (SSFA f) g = SSFA (\st -> \guts -> 
+     let (st', pairs) = (f st guts)
+      -- TODO st'' - should merge the heap
+      in (st', concatMap (\(a, guts') -> snd ((ssf $ g(a)) st' guts')) pairs))
+
+  return a = SSFA (\s-> \guts -> (s, [(a,guts)]))
+
+-- Instance of the analysis for some particular guts
+-- instance (Addressable a t, Storable a s) 
+--    => Analysis a                -- address type
+--                (ProcCh a, s, t) -- Generic Analysis' guts
+--                (SingleStoreAnalysis) where
+--   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
+--     let proc = Clo(l, ρ) 
+--      in [ (proc, (Just proc,σ,t)) ])
+--   fun ρ (Ref v) = GCFA (\ (_,σ,t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in [ (proc, (Just proc,σ,t)) | proc <- Set.toList procs ]) 
+
+--   arg ρ (Lam l) = GCFA (\ (ch,σ,t) ->
+--     let proc = Clo(l, ρ) 
+--      in [ (Set.singleton proc, (ch, σ, t)) ])
+--   arg ρ (Ref v) = GCFA (\ (ch,σ,t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in [ (procs, (ch, σ, t)) ])
+
+--   a $= d = GCFA (\ (ch,σ,t) -> [((),(ch,bind σ a d,t))] )
+
+--   alloc v = GCFA (\ (ch,σ,t) -> [(valloc v t, (ch, σ, t))])
+
+--   tick ps = GCFA (\ (Just proc, σ, t) ->
+--      [((), (Just proc, σ, advance proc ps t))])
+
+--   stepAnalysis config state = gf (mnext state) $ config
+
+--   inject call = ((call, Map.empty), (Nothing, σ0, τ0))
 
 ----------------------------------------------------------------------
  -- Example: KCFA from GenericAnalysis
