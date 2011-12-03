@@ -139,6 +139,8 @@ instance (Addressable a t, Storable a s)
   tick ps = GCFA (\ (Just proc, σ, t) ->
      [((), (Just proc, σ, advance proc ps t))])
 
+--  stepAnalysis config state = gf (mnext state) $ config
+
  -- Generic transition
 mnext :: (Analysis a g m) => (PΣ a) -> m g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
