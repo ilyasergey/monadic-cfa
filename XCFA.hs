@@ -102,12 +102,12 @@ class (Ord a, Eq a) => Addressable a t where
   advance :: Val a -> PΣ a -> t -> t 
   
 -- GenericAnalysis :: * -> * -> * -> *
-data GenericAnalysis a g b = GCFA {
+data GenericAnalysis g b = GCFA {
   gf :: g -> [(b, g)]
 }
 
 -- Curry GenericAnalysis for the given guts
-instance Monad (GenericAnalysis a g) where
+instance Monad (GenericAnalysis g) where
   (>>=) (GCFA f) g = GCFA (\ guts ->
     concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
   return a = GCFA (\ guts -> [(a,guts)])
@@ -116,7 +116,7 @@ instance Monad (GenericAnalysis a g) where
 instance (Addressable a t, Storable a s) 
    => Analysis a 
                (ProcCh a, s, t) -- Generic Analysis' guts
-      (GenericAnalysis a) where
+      (GenericAnalysis) where
   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
     let proc = Clo(l, ρ) 
      in [ (proc, (Just proc,σ,t)) ])
@@ -138,7 +138,7 @@ instance (Addressable a t, Storable a s)
   tick ps = GCFA (\ (Just proc, σ, t) ->
      [((), (Just proc, σ, advance proc ps t))])
 
---  stepAnalysis config state = gf (mnext state) $ config
+  stepAnalysis config state = gf (mnext state) $ config
 
  -- Generic transition
 mnext :: Analysis a g m => (PΣ a) -> m g (PΣ a)
@@ -237,7 +237,7 @@ initConfigGF state = undefined
 --stepAnalysis config state = cf (mnext state) config
 
 -- Insight: analysis shouldn't depen on the semanticsc  
-instance MonadFix (GenericAnalysis a g) where
+instance MonadFix (GenericAnalysis g) where
   mfix trans = 
      let state0 = undefined -- how to obtain it ?!!
      in (return state0) -- iteration zero: return initial state
