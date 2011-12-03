@@ -237,21 +237,23 @@ instance Storable KAddr (Store KAddr) where
 ----------------------------------------------------------------------
 
  -- Abstract state-space exploration algorithm
+ -- TODO: remove step counting and trace output 
 loop :: (Analysis a g m, Ord a, Ord g, Show a, Show g) =>
-        [(PΣ a, g)] -> Set (PΣ a, g) -> Set (PΣ a, g)
-loop worklist visited = 
-  trace ("Worklist:\n" ++ show worklist ++ "\n") $
+        [(PΣ a, g)] -> Set (PΣ a, g) -> Int -> Set (PΣ a, g)
+loop worklist visited step = 
+  -- trace output
+  trace ("Worklist [step " ++ show step ++ "]:\n" ++ show worklist ++ "\n") $
   let newStates = worklist >>= (\(state, config) -> 
                                  stepAnalysis config state)
       newWorkList = List.filter (\elem -> not (Set.member elem visited)) newStates 
    in if List.null newWorkList
       then visited
       else let newVisited = visited ⊔ (Set.fromList newWorkList)
-            in loop newWorkList newVisited
+            in loop newWorkList newVisited (step + 1)
 
 -- compute an approximation
 explore :: (Analysis a g m, Ord a, Ord g, Show a, Show g) => CExp -> Set (PΣ a, g)
-explore program = loop [inject program] Set.empty
+explore program = loop [inject program] Set.empty 0
 
 ----------------------------------------------------------------------
 -- example program
