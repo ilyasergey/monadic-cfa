@@ -73,9 +73,8 @@ data Val a = Clo (Lambda, Env a)
  -- Generic store.
 type Store a = a :-> (D a)
 
-
-
  -- Abstract analysis interface.
+ -- Type parameter "g" is for guts and is passed along
 class Monad (m g) => Analysis a g m where
   fun :: (Env a) -> AExp -> m g (Val a)
   arg :: (Env a) -> AExp -> m g (D a)
@@ -86,9 +85,6 @@ class Monad (m g) => Analysis a g m where
   tick :: (PΣ a) -> m g ()
 
   stepAnalysis :: g -> PΣ a -> [(PΣ a, g)]
-
- -- 
-
 
  -- Generic analysis.
 type ProcCh a = Maybe (Val a) -- Nondeterministic choice.
@@ -105,18 +101,19 @@ class (Ord a, Eq a) => Addressable a t where
   valloc :: Var -> t -> a 
   advance :: Val a -> PΣ a -> t -> t 
   
-
+-- GenericAnalysis :: * -> * -> * -> *
 data GenericAnalysis a g b = GCFA {
   gf :: g -> [(b, g)]
 }
 
+-- Curry GenericAnalysis for the given guts
 instance Monad (GenericAnalysis a g) where
   (>>=) (GCFA f) g = GCFA (\ guts ->
     concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
   return a = GCFA (\ guts -> [(a,guts)])
 
 
---  (GenericAnalysis KAddr KTime (Store KAddr))
+-- Instance of the analysis for some particular guts
 instance (Addressable a t, Storable a s) 
    => Analysis a 
                (ProcCh a, s, t) -- Generic Analysis' guts
@@ -142,8 +139,6 @@ instance (Addressable a t, Storable a s)
   tick ps = GCFA (\ (Just proc, σ, t) ->
      [((), (Just proc, σ, advance proc ps t))])
 
-
-
  -- Generic transition
 mnext :: (Analysis a g m) => (PΣ a) -> m g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
@@ -160,41 +155,41 @@ mnext ps@(Call f aes, ρ) = do
 
 -- Need to pass an unused type parameter `g' for "guts"
 data Concrete a g b = 
- Concrete { cf :: (Store a,Int) -> (b,Store a,Int) }
+ Concrete { cf :: g -> (b, g) }
 
 data CAddr = CBind Var Int
   deriving (Eq,Ord)
 
 instance Monad (Concrete CAddr g) where
-  (>>=) (Concrete f) g = Concrete (\ (σ,t) ->
-    let (a, σ', t') = f(σ,t)
-     in (cf $ g(a))(σ',t'))
-  return a = Concrete (\ (σ,t) -> (a,σ,t))
-
+  (>>=) (Concrete f) g = Concrete (\guts ->
+    let (a, guts') = f guts
+     in (cf $ g(a)) guts')
+  return a = Concrete (\guts -> (a, guts))
 
 instance Analysis CAddr 
                   (Store CAddr, Int) 
          (Concrete CAddr) where
   fun ρ (Lam l) = Concrete (\ (σ,t) -> 
     let proc = Clo(l, ρ)
-     in (proc,σ,t))
+     in (proc,(σ,t)))
   fun ρ (Ref v) = Concrete (\ (σ,t) -> 
     let [proc] = Set.toList $ σ!(ρ!v)
-     in (proc,σ,t))
+     in (proc,(σ,t)))
 
   arg ρ (Lam l) = Concrete (\ (σ,t) ->
     let proc = Clo(l, ρ) 
-     in (Set.singleton proc, σ, t))
+     in (Set.singleton proc, (σ, t)))
   arg ρ (Ref v) = Concrete (\ (σ,t) -> 
     let procs = σ!(ρ!v)
-     in (procs, σ, t))
+     in (procs, (σ, t)))
 
-  a $= d = Concrete (\ (σ,t) -> ((),σ ⨆ [a ==> d],t) )
+  a $= d = Concrete (\ (σ,t) -> ((), (σ ⨆ [a ==> d],t)) )
 
-  alloc v = Concrete (\ (σ,t) -> (CBind v t, σ, t))
+  alloc v = Concrete (\ (σ,t) -> (CBind v t, (σ, t)))
 
-  tick (call, ρ) = Concrete (\ (σ,n) -> ((), σ, n+1))
+  tick (call, ρ) = Concrete (\ (σ,n) -> ((), (σ, n+1)))
 
+--  stepAnalysis config state = [cf (mnext state) $ config]
  -- Example: KCFA from GenericAnalysis
 
 k = 1
