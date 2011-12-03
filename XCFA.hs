@@ -155,21 +155,22 @@ mnext ps@(Call f aes, ρ) = do
  -- Example: Concrete Semantics
 
 -- Need to pass an unused type parameter `g' for "guts"
-data Concrete a g b = 
- Concrete { cf :: g -> (b, g) }
+-- Problem: no dependency between "a" and "g" is captured
+data Concrete g b = Concrete { 
+    cf :: g -> (b, g)}
 
 data CAddr = CBind Var Int
-  deriving (Eq,Ord)
+  deriving (Eq, Ord)
 
-instance Monad (Concrete a g) where
+instance Monad (Concrete g) where
   (>>=) (Concrete f) g = Concrete (\guts ->
-    let (a, guts') = f guts
-     in (cf $ g(a)) guts')
-  return a = Concrete (\guts -> (a, guts))
+    let (b, guts') = f guts
+     in (cf $ g(b)) guts')
+  return b = Concrete (\guts -> (b, guts))
 
 instance Analysis CAddr 
                   (Store CAddr, Int) 
-         (Concrete CAddr) where
+         (Concrete) where
   fun ρ (Lam l) = Concrete (\ (σ,t) -> 
     let proc = Clo(l, ρ)
      in (proc,(σ,t)))
@@ -190,7 +191,8 @@ instance Analysis CAddr
 
   tick (call, ρ) = Concrete (\ (σ,n) -> ((), (σ, n+1)))
 
---  stepAnalysis config state = [cf (mnext state) $ config]
+  stepAnalysis config state = [cf (mnext state) config]
+
  -- Example: KCFA from GenericAnalysis
 
 k = 1
@@ -231,7 +233,8 @@ instance Storable KAddr (Store KAddr) where
 initConfigGF state = undefined 
 --(state, Just (undefined :: Val KAddr), Map.empty, KCalls [])       
 
---stepAnalysis config = \state -> gf (mnext state) $ config
+--stepAnalysis :: Analysis a g (Concrete a) => g -> PΣ a -> (PΣ a, g)
+--stepAnalysis config state = cf (mnext state) config
 
 -- Insight: analysis shouldn't depen on the semanticsc  
 instance MonadFix (GenericAnalysis a g) where
