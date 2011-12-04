@@ -2,6 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
+-- TODO: get rid of this
+{-# LANGUAGE UndecidableInstances #-}
+
 module Main where
 
  -- Imports.
@@ -75,27 +78,23 @@ type Store a = a :-> (D a)
 
  -- Do we really need functional dependencies between variables?
  -- 1. Indeed, guts define the underlying monad
- -- 2. Guts define addresses? - Yes, indeed
- -- 3. Finally, guts define the shared component
+ -- 2. Guts define the shared component
  -- !! No more dependencies is needed
 
- -- TODO: Explain to Matt and Jan the necessity of dependency
- -- variables, and why is it natural
- 
-class Monad (m s g) => Analysis a s g m | g->m, g->a, g->s where
-  fun :: (Env a) -> AExp -> m s g (Val a)
-  arg :: (Env a) -> AExp -> m s g (D a)
+class Monad (m g) => Analysis a g m | g->m where
+  fun :: (Env a) -> AExp -> m g (Val a)
+  arg :: (Env a) -> AExp -> m g (D a)
 
-  ($=) :: a -> (D a) -> m s g ()
+  ($=) :: a -> (D a) -> m g ()
  
-  alloc :: Var -> m s g a
-  tick :: (PΣ a) -> m s g ()
+  alloc :: Var -> m g a
+  tick :: (PΣ a) -> m g ()
 
   stepAnalysis :: g -> PΣ a -> [(PΣ a, g)]
   inject :: CExp -> (PΣ a, g)
 
 -- Generic transition
-mnext :: Analysis a s g m => (PΣ a) -> m s g (PΣ a)
+mnext :: Analysis a g m => (PΣ a) -> m g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
@@ -110,21 +109,20 @@ mnext ps@(Exit, ρ) = return $! ps
  -- Example: Concrete Semantics
 ----------------------------------------------------------------------
 
-data Concrete s g b = Concrete { 
+data Concrete g b = Concrete { 
     cf :: g -> (b, g)
 }
 
 data CAddr = CBind Var Int
   deriving (Eq, Ord, Show)
 
-instance Monad (Concrete s g) where
+instance Monad (Concrete g) where
   (>>=) (Concrete f) g = Concrete (\guts ->
     let (b, guts') = f guts
      in (cf $ g(b)) guts')
   return b = Concrete (\guts -> (b, guts))
 
 instance Analysis CAddr 
-                  ()
                   (Store CAddr, Int) 
          (Concrete) where
   fun ρ (Lam l) = Concrete (\ (σ,t) -> 
@@ -178,12 +176,12 @@ class Lattice s => Storable a s | s->a where
   
 -- GenericAnalysis :: * -> * -> *
 -- parametrized by guts and passed result
-data GenericAnalysis s g b = GCFA {
+data GenericAnalysis g b = GCFA {
   gf :: g -> [(b, g)]
 }
 
 -- Curry GenericAnalysis for the fixed guts
-instance Monad (GenericAnalysis s g) where
+instance Monad (GenericAnalysis g) where
   (>>=) (GCFA f) g = GCFA (\ guts ->
     concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
   return a = GCFA (\ guts -> [(a,guts)])
@@ -191,7 +189,6 @@ instance Monad (GenericAnalysis s g) where
 -- Instance of the analysis for some particular guts
 instance (Addressable a t, Storable a s) 
    => Analysis a                -- address type
-               ()               -- no shared component
                (ProcCh a, s, t) -- Generic Analysis' guts
                (GenericAnalysis) where
   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
@@ -223,13 +220,10 @@ instance (Addressable a t, Storable a s)
  -- Single store-threading analysis.
 ----------------------------------------------------------------------
   
--- GenericAnalysis :: * -> * -> *
--- parametrized by guts and passed result
 data SingleStoreAnalysis st g b = SSFA {
   ssf :: st -> g -> (st, [(b, g)])
 }
 
--- Curry GenericAnalysis for the fixed guts
 instance Lattice st => Monad (SingleStoreAnalysis st g) where
   (>>=) (SSFA f) g = SSFA (\st -> \guts -> 
      let (st', pairs) = (f st guts) -- make an f-step
@@ -243,35 +237,38 @@ instance Lattice st => Monad (SingleStoreAnalysis st g) where
 
   return a = SSFA (\s -> \guts -> (s, [(a, guts)]))
 
--- instance (Addressable a t, Storable a s) 
---    => Analysis a                     -- address type
---                ()                     -- shared store
---                (ProcCh a, t)         -- Generic Analysis' guts
---                (SingleStoreAnalysis) where
---   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
---     let proc = Clo(l, ρ) 
---      in [ (proc, (Just proc,σ,t)) ])
---   fun ρ (Ref v) = GCFA (\ (_,σ,t) -> 
---     let procs = fetch σ (ρ!v)
---      in [ (proc, (Just proc,σ,t)) | proc <- Set.toList procs ]) 
+-- TODO: !!! violates the Coverage Condition
+-- since (SingleStoreAnalysis s) has `s', which is not
+-- mentioned in (ProcCh a, t)
+instance (Addressable a t, Storable a s) 
+   => Analysis a                     -- address type
+               (ProcCh a, t)         -- Generic Analysis' guts
+               (SingleStoreAnalysis s) where
+  fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
+    let proc = Clo(l, ρ) 
+     in (σ, [(proc, (Just proc,t))]))
 
---   arg ρ (Lam l) = GCFA (\ (ch,σ,t) ->
---     let proc = Clo(l, ρ) 
---      in [ (Set.singleton proc, (ch, σ, t)) ])
---   arg ρ (Ref v) = GCFA (\ (ch,σ,t) -> 
---     let procs = fetch σ (ρ!v)
---      in [ (procs, (ch, σ, t)) ])
+  fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
+    let procs = fetch σ (ρ!v)
+     in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
 
---   a $= d = GCFA (\ (ch,σ,t) -> [((),(ch,bind σ a d,t))] )
+  arg ρ (Lam l) = SSFA (\σ -> \(ch,t) ->
+    let proc = Clo(l, ρ) 
+     in (σ, [ (Set.singleton proc, (ch, t)) ]))
+  arg ρ (Ref v) = SSFA (\σ -> \ (ch,t) -> 
+    let procs = fetch σ (ρ!v)
+     in (σ, [ (procs, (ch, t)) ]))
 
---   alloc v = GCFA (\ (ch,σ,t) -> [(valloc v t, (ch, σ, t))])
+  a $= d = SSFA (\σ -> \(ch,t) -> (bind σ a d, [((), (ch,t))] ))
 
---   tick ps = GCFA (\ (Just proc, σ, t) ->
---      [((), (Just proc, σ, advance proc ps t))])
+  alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
 
---   stepAnalysis config state = gf (mnext state) $ config
+  tick ps = SSFA (\σ -> \(Just proc, t) ->
+     (σ, [((), (Just proc, advance proc ps t))]))
 
---   inject call = ((call, Map.empty), (Nothing, σ0, τ0))
+--  stepAnalysis config state = snd (ssf (mnext state) σ0 config)
+
+  inject call = ((call, Map.empty), (Nothing, τ0))
 
 ----------------------------------------------------------------------
  -- Example: KCFA from GenericAnalysis
@@ -305,7 +302,7 @@ instance Storable KAddr (Store KAddr) where
 
  -- Abstract state-space exploration algorithm
  -- TODO: remove step counting and trace output 
-loop :: (Analysis a s g m, Ord a, Ord g, Show a, Show g) =>
+loop :: (Analysis a g m, Ord a, Ord g, Show a, Show g) =>
         [(PΣ a, g)] -> Set (PΣ a, g) -> Int -> Set (PΣ a, g)
 loop worklist visited step = 
   -- trace output
@@ -319,7 +316,7 @@ loop worklist visited step =
             in loop newWorkList newVisited (step + 1)
 
 -- compute an approximation
-explore :: (Analysis a s g m, Ord a, Ord g, Show a, Show g) => CExp -> Set (PΣ a, g)
+explore :: (Analysis a g m, Ord a, Ord g, Show a, Show g) => CExp -> Set (PΣ a, g)
 explore program = loop [inject program] Set.empty 0
 
 ----------------------------------------------------------------------
@@ -335,7 +332,7 @@ ex   = Call comb [idx, idy]
 -- concrete analysis is chosen by the type specification
 concreteResult = explore ex :: Set (PΣ CAddr, (Store CAddr, Int))
 
--- TODO: Implement initial config
+-- abstract analysis is chosen by the type specification
 abstractResult = explore ex :: Set (PΣ KAddr, (ProcCh KAddr, Store KAddr, KTime))
 
 {-----------------------------------------------------------
