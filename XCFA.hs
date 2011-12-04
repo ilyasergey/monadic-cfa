@@ -325,9 +325,9 @@ loop worklist visited step =
 explore :: (Analysis a s g m, Ord a, Ord g, Show a, Show g) => CExp -> Set (PΣ a, g)
 explore program = loop [inject program] Set.empty 0
 
--- ----------------------------------------------------------------------
--- -- example program
--- ----------------------------------------------------------------------
+----------------------------------------------------------------------
+-- example program
+----------------------------------------------------------------------
 
 -- ((λ (f g) (f g)) (λ (x) x) (λ (y) Exit))
 idx  = Lam (["x"] :=> Call (Ref "x") [])
