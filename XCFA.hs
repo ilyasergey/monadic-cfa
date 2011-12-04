@@ -291,7 +291,6 @@ data KAddr = KBind Var KTime
 data KTime = KCalls [CExp] 
   deriving (Eq, Ord, Show)
 
-
 instance Addressable KAddr KTime where
  τ0 = KCalls []
  valloc v t = KBind v t
