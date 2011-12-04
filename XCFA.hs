@@ -164,7 +164,7 @@ class (Ord a, Eq a) => Addressable a t | t->a where
 
 -- and again:
 -- Store uniquely defines the type of its addresses
-class Lattice s => Storable a s | s->a where
+class Lattice s => StoreLike a s | s->a where
   σ0 :: s
   bind :: s -> a -> (D a)-> s
   replace :: s -> a -> (D a) -> s
@@ -187,7 +187,7 @@ instance Monad (GenericAnalysis g) where
   return a = GCFA (\ guts -> [(a,guts)])
 
 -- Instance of the analysis for some particular guts
-instance (Addressable a t, Storable a s) 
+instance (Addressable a t, StoreLike a s) 
    => Analysis a                -- address type
                (ProcCh a, s, t) -- Generic Analysis' guts
                (GenericAnalysis) where
@@ -220,55 +220,57 @@ instance (Addressable a t, Storable a s)
  -- Single store-threading analysis.
 ----------------------------------------------------------------------
   
-data SingleStoreAnalysis st g b = SSFA {
-  ssf :: st -> g -> (st, [(b, g)])
+data StoreLike a s => SingleStoreAnalysis a s g b = SSFA {
+  runWithStore :: g -> (s, [(b, g)])
 }
 
-instance Lattice st => Monad (SingleStoreAnalysis st g) where
-  (>>=) (SSFA f) g = SSFA (\st -> \guts -> 
-     let (st', pairs) = (f st guts) -- make an f-step
+-- TODO redefine store-like logic
+
+instance StoreLike a s => Monad (SingleStoreAnalysis a s g) where
+  (>>=) (SSFA f) g = SSFA (\guts -> 
+     let (st', pairs) = f guts -- make an f-step
          -- get new results via g :: [(st, [(b, g)])]
-         newResults = List.map (\(a, guts') -> (ssf $ g(a)) st' guts')
+         newResults = List.map (\(a, guts') -> (runWithStore $ g(a)) guts')
                                pairs
          -- merge stores and concatenate the results :: (st, [(b, g)])
          -- requires a lattice structure of a store
       in foldl (\(s, bg) -> \(s', bg') -> (s ⊔ s', bg ++ bg'))
                (st', []) newResults)
 
-  return a = SSFA (\s -> \guts -> (s, [(a, guts)]))
+  return a = SSFA (\guts -> (bot, [(a, guts)]))
 
 -- TODO: !!! violates the Coverage Condition
 -- since (SingleStoreAnalysis s) has `s', which is not
 -- mentioned in (ProcCh a, t)
-instance (Addressable a t, Storable a s) 
-   => Analysis a                     -- address type
-               (ProcCh a, t)         -- Generic Analysis' guts
-               (SingleStoreAnalysis s) where
-  fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
-    let proc = Clo(l, ρ) 
-     in (σ, [(proc, (Just proc,t))]))
+-- instance (Addressable a t, StoreLike a s) 
+--    => Analysis a                     -- address type
+--                (ProcCh a, t)         -- Generic Analysis' guts
+--                (SingleStoreAnalysis s) where
+--   fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
+--     let proc = Clo(l, ρ) 
+--      in (σ, [(proc, (Just proc,t))]))
 
-  fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
-    let procs = fetch σ (ρ!v)
-     in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
+--   fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
 
-  arg ρ (Lam l) = SSFA (\σ -> \(ch,t) ->
-    let proc = Clo(l, ρ) 
-     in (σ, [ (Set.singleton proc, (ch, t)) ]))
-  arg ρ (Ref v) = SSFA (\σ -> \ (ch,t) -> 
-    let procs = fetch σ (ρ!v)
-     in (σ, [ (procs, (ch, t)) ]))
+--   arg ρ (Lam l) = SSFA (\σ -> \(ch,t) ->
+--     let proc = Clo(l, ρ) 
+--      in (σ, [ (Set.singleton proc, (ch, t)) ]))
+--   arg ρ (Ref v) = SSFA (\σ -> \ (ch,t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in (σ, [ (procs, (ch, t)) ]))
 
-  a $= d = SSFA (\σ -> \(ch,t) -> (bind σ a d, [((), (ch,t))] ))
+--   a $= d = SSFA (\σ -> \(ch,t) -> (bind σ a d, [((), (ch,t))] ))
 
-  alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
+--   alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
 
-  tick ps = SSFA (\σ -> \(Just proc, t) ->
-     (σ, [((), (Just proc, advance proc ps t))]))
+--   tick ps = SSFA (\σ -> \(Just proc, t) ->
+--      (σ, [((), (Just proc, advance proc ps t))]))
 
---  stepAnalysis config state = snd (ssf (mnext state) σ0 config)
+--   stepAnalysis config state = snd (ssf (mnext state) undefined config)
 
-  inject call = ((call, Map.empty), (Nothing, τ0))
+--   inject call = ((call, Map.empty), (Nothing, τ0))
 
 ----------------------------------------------------------------------
  -- Example: KCFA from GenericAnalysis
@@ -289,7 +291,7 @@ instance Addressable KAddr KTime where
  advance proc (call, ρ) (KCalls calls) = 
   KCalls $ take k (call : calls) 
 
-instance Storable KAddr (Store KAddr) where
+instance StoreLike KAddr (Store KAddr) where
  σ0 = Map.empty  
 
  bind σ a d = σ ⨆ [a ==> d]
