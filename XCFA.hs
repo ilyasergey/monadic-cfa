@@ -250,7 +250,7 @@ instance (Addressable a t, StoreLike a s)
     let procs = fetch σ (ρ!v)
      in (σ, [ (proc, (Just proc,σ,t)) | proc <- Set.toList procs ])) 
 
-  arg ρ (Lam l) = SSFA (\ (ch,σ,t) ->
+  arg ρ (Lam l) = SSFA (\ (ch,σ,t) -> 
     let proc = Clo(l, ρ) 
      in (σ, [ (Set.singleton proc, (ch, σ, t)) ]))
   arg ρ (Ref v) = SSFA (\ (ch,σ,t) -> 
