@@ -76,25 +76,26 @@ type Store a = a :-> (D a)
  -- Do we really need functional dependencies between variables?
  -- 1. Indeed, guts define the underlying monad
  -- 2. Guts define addresses? - Yes, indeed
+ -- 3. Finally, guts define the shared component
  -- !! No more dependencies is needed
 
  -- TODO: Explain to Matt and Jan the necessity of dependency
  -- variables, and why is it natural
  
-class Monad (m g) => Analysis a g m | g->m, g->a where
-  fun :: (Env a) -> AExp -> m g (Val a)
-  arg :: (Env a) -> AExp -> m g (D a)
+class Monad (m s g) => Analysis a s g m | g->m, g->a, g->s where
+  fun :: (Env a) -> AExp -> m s g (Val a)
+  arg :: (Env a) -> AExp -> m s g (D a)
 
-  ($=) :: a -> (D a) -> m g ()
+  ($=) :: a -> (D a) -> m s g ()
  
-  alloc :: Var -> m g a
-  tick :: (PΣ a) -> m g ()
+  alloc :: Var -> m s g a
+  tick :: (PΣ a) -> m s g ()
 
   stepAnalysis :: g -> PΣ a -> [(PΣ a, g)]
   inject :: CExp -> (PΣ a, g)
 
 -- Generic transition
-mnext :: Analysis a g m => (PΣ a) -> m g (PΣ a)
+mnext :: Analysis a s g m => (PΣ a) -> m s g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
@@ -109,19 +110,21 @@ mnext ps@(Exit, ρ) = return $! ps
  -- Example: Concrete Semantics
 ----------------------------------------------------------------------
 
-data Concrete g b = Concrete { 
-    cf :: g -> (b, g)}
+data Concrete s g b = Concrete { 
+    cf :: g -> (b, g)
+}
 
 data CAddr = CBind Var Int
   deriving (Eq, Ord, Show)
 
-instance Monad (Concrete g) where
+instance Monad (Concrete s g) where
   (>>=) (Concrete f) g = Concrete (\guts ->
     let (b, guts') = f guts
      in (cf $ g(b)) guts')
   return b = Concrete (\guts -> (b, guts))
 
 instance Analysis CAddr 
+                  ()
                   (Store CAddr, Int) 
          (Concrete) where
   fun ρ (Lam l) = Concrete (\ (σ,t) -> 
@@ -163,7 +166,7 @@ class (Ord a, Eq a) => Addressable a t | t->a where
 
 -- and again:
 -- Store uniquely defines the type of its addresses
-class Storable a s | s->a where
+class Lattice s => Storable a s | s->a where
   σ0 :: s
   bind :: s -> a -> (D a)-> s
   replace :: s -> a -> (D a) -> s
@@ -175,12 +178,12 @@ class Storable a s | s->a where
   
 -- GenericAnalysis :: * -> * -> *
 -- parametrized by guts and passed result
-data GenericAnalysis g b = GCFA {
+data GenericAnalysis s g b = GCFA {
   gf :: g -> [(b, g)]
 }
 
 -- Curry GenericAnalysis for the fixed guts
-instance Monad (GenericAnalysis g) where
+instance Monad (GenericAnalysis s g) where
   (>>=) (GCFA f) g = GCFA (\ guts ->
     concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
   return a = GCFA (\ guts -> [(a,guts)])
@@ -188,6 +191,7 @@ instance Monad (GenericAnalysis g) where
 -- Instance of the analysis for some particular guts
 instance (Addressable a t, Storable a s) 
    => Analysis a                -- address type
+               ()               -- no shared component
                (ProcCh a, s, t) -- Generic Analysis' guts
                (GenericAnalysis) where
   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
@@ -237,12 +241,12 @@ instance Lattice st => Monad (SingleStoreAnalysis st g) where
       in foldl (\(s, bg) -> \(s', bg') -> (s ⊔ s', bg ++ bg'))
                (st', []) newResults)
 
-  return a = SSFA (\s -> \guts -> (s, [(a,guts)]))
+  return a = SSFA (\s -> \guts -> (s, [(a, guts)]))
 
--- Instance of the analysis for some particular guts
 -- instance (Addressable a t, Storable a s) 
---    => Analysis a                -- address type
---                (ProcCh a, s, t) -- Generic Analysis' guts
+--    => Analysis a                     -- address type
+--                ()                     -- shared store
+--                (ProcCh a, t)         -- Generic Analysis' guts
 --                (SingleStoreAnalysis) where
 --   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
 --     let proc = Clo(l, ρ) 
@@ -301,7 +305,7 @@ instance Storable KAddr (Store KAddr) where
 
  -- Abstract state-space exploration algorithm
  -- TODO: remove step counting and trace output 
-loop :: (Analysis a g m, Ord a, Ord g, Show a, Show g) =>
+loop :: (Analysis a s g m, Ord a, Ord g, Show a, Show g) =>
         [(PΣ a, g)] -> Set (PΣ a, g) -> Int -> Set (PΣ a, g)
 loop worklist visited step = 
   -- trace output
@@ -315,7 +319,7 @@ loop worklist visited step =
             in loop newWorkList newVisited (step + 1)
 
 -- compute an approximation
-explore :: (Analysis a g m, Ord a, Ord g, Show a, Show g) => CExp -> Set (PΣ a, g)
+explore :: (Analysis a s g m, Ord a, Ord g, Show a, Show g) => CExp -> Set (PΣ a, g)
 explore program = loop [inject program] Set.empty 0
 
 ----------------------------------------------------------------------
