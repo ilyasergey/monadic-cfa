@@ -2,9 +2,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
--- TODO: get rid of this!
-{-# LANGUAGE UndecidableInstances #-}
-
 module Main where
 
  -- Imports.
@@ -175,48 +172,48 @@ class Lattice s => StoreLike a s | s->a where
  -- Generic analysis.
 ----------------------------------------------------------------------
   
--- GenericAnalysis :: * -> * -> *
--- parametrized by guts and passed result
-data GenericAnalysis s g b = GCFA {
-  gf :: g -> [(b, g)]
-}
+-- -- GenericAnalysis :: * -> * -> *
+-- -- parametrized by guts and passed result
+-- data GenericAnalysis s g b = GCFA {
+--   gf :: g -> [(b, g)]
+-- }
 
--- Curry GenericAnalysis for the fixed guts
-instance Monad (GenericAnalysis s g) where
-  (>>=) (GCFA f) g = GCFA (\ guts ->
-    concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
-  return a = GCFA (\ guts -> [(a,guts)])
+-- -- Curry GenericAnalysis for the fixed guts
+-- instance Monad (GenericAnalysis s g) where
+--   (>>=) (GCFA f) g = GCFA (\ guts ->
+--     concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
+--   return a = GCFA (\ guts -> [(a,guts)])
 
--- Instance of the analysis for some particular guts
-instance (Addressable a t, StoreLike a s) 
-   => Analysis a                -- address type
-               ()
-               (ProcCh a, s, t) -- Generic Analysis' guts
-               (GenericAnalysis) where
-  fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
-    let proc = Clo(l, ρ) 
-     in [ (proc, (Just proc,σ,t)) ])
-  fun ρ (Ref v) = GCFA (\ (_,σ,t) -> 
-    let procs = fetch σ (ρ!v)
-     in [ (proc, (Just proc,σ,t)) | proc <- Set.toList procs ]) 
+-- -- Instance of the analysis for some particular guts
+-- instance (Addressable a t, StoreLike a s) 
+--    => Analysis a                -- address type
+--                ()
+--                (ProcCh a, s, t) -- Generic Analysis' guts
+--                (GenericAnalysis) where
+--   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
+--     let proc = Clo(l, ρ) 
+--      in [ (proc, (Just proc,σ,t)) ])
+--   fun ρ (Ref v) = GCFA (\ (_,σ,t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in [ (proc, (Just proc,σ,t)) | proc <- Set.toList procs ]) 
 
-  arg ρ (Lam l) = GCFA (\ (ch,σ,t) ->
-    let proc = Clo(l, ρ) 
-     in [ (Set.singleton proc, (ch, σ, t)) ])
-  arg ρ (Ref v) = GCFA (\ (ch,σ,t) -> 
-    let procs = fetch σ (ρ!v)
-     in [ (procs, (ch, σ, t)) ])
+--   arg ρ (Lam l) = GCFA (\ (ch,σ,t) ->
+--     let proc = Clo(l, ρ) 
+--      in [ (Set.singleton proc, (ch, σ, t)) ])
+--   arg ρ (Ref v) = GCFA (\ (ch,σ,t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in [ (procs, (ch, σ, t)) ])
 
-  a $= d = GCFA (\ (ch,σ,t) -> [((),(ch,bind σ a d,t))] )
+--   a $= d = GCFA (\ (ch,σ,t) -> [((),(ch,bind σ a d,t))] )
 
-  alloc v = GCFA (\ (ch,σ,t) -> [(valloc v t, (ch, σ, t))])
+--   alloc v = GCFA (\ (ch,σ,t) -> [(valloc v t, (ch, σ, t))])
 
-  tick ps = GCFA (\ (Just proc, σ, t) ->
-     [((), (Just proc, σ, advance proc ps t))])
+--   tick ps = GCFA (\ (Just proc, σ, t) ->
+--      [((), (Just proc, σ, advance proc ps t))])
 
-  stepAnalysis config state = gf (mnext state) $ config
+--   stepAnalysis config state = gf (mnext state) $ config
 
-  inject call = ((call, Map.empty), (Nothing, σ0, τ0))
+--   inject call = ((call, Map.empty), (Nothing, σ0, τ0))
 
 ----------------------------------------------------------------------
  -- Single store-threading analysis.
@@ -241,40 +238,37 @@ instance StoreLike a s => Monad (SingleStoreAnalysis a s g) where
 
   return a = SSFA (\guts -> (bot, [(a, guts)]))
 
--- -- Auxiliary functions
+instance (Addressable a t, StoreLike a s) 
+   => Analysis a                     -- address type
+               s                     -- shared store
+               (ProcCh a, s, t)      -- SingleStore Analysis' guts
+               (SingleStoreAnalysis a) where
+  fun ρ (Lam l) = SSFA (\ (_,σ,t) ->
+    let proc = Clo(l, ρ) 
+     in (σ, [(proc, (Just proc,σ,t)) ]))
+  fun ρ (Ref v) = SSFA (\ (_,σ,t) -> 
+    let procs = fetch σ (ρ!v)
+     in (σ, [ (proc, (Just proc,σ,t)) | proc <- Set.toList procs ])) 
 
--- -- TODO: !!! violates the Coverage Condition
--- -- since (SingleStoreAnalysis s) has `s', which is not
--- -- mentioned in (ProcCh a, t)
--- instance (Addressable a t, StoreLike a s) 
---    => Analysis a                     -- address type
---                (ProcCh a, t)         -- SingleStore Analysis' guts
---                (SingleStoreAnalysis a s) where
---   fun ρ (Lam l) = SSFA (\(_,t) ->
---     let proc = Clo(l, ρ) 
---      in (bot, [(proc, (Just proc,t))]))
+  arg ρ (Lam l) = SSFA (\ (ch,σ,t) ->
+    let proc = Clo(l, ρ) 
+     in (σ, [ (Set.singleton proc, (ch, σ, t)) ]))
+  arg ρ (Ref v) = SSFA (\ (ch,σ,t) -> 
+    let procs = fetch σ (ρ!v)
+     in (σ, [ (procs, (ch, σ, t)) ]))
 
---   fun ρ (Ref v) = SSFA (\(_,t) -> 
---     let procs = undefined -- fetch σ (ρ!v)
---      in (bot, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
+  a $= d = SSFA (\ (ch,σ,t) -> 
+    let σ' = bind σ a d
+    in (σ', [((),(ch,σ',t))] ))
 
--- --   arg ρ (Lam l) = SSFA (\σ -> \(ch,t) ->
--- --     let proc = Clo(l, ρ) 
--- --      in (σ, [ (Set.singleton proc, (ch, t)) ]))
--- --   arg ρ (Ref v) = SSFA (\σ -> \ (ch,t) -> 
--- --     let procs = fetch σ (ρ!v)
--- --      in (σ, [ (procs, (ch, t)) ]))
+  alloc v = SSFA (\ (ch,σ,t) -> (σ, [(valloc v t, (ch, σ, t))]))
 
--- --   a $= d = SSFA (\σ -> \(ch,t) -> (bind σ a d, [((), (ch,t))] ))
+  tick ps = SSFA (\ (Just proc, σ, t) ->
+     (σ, ([((), (Just proc, σ, advance proc ps t))])))
 
--- --   alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
+  stepAnalysis config state = snd . runWithStore (mnext state) $ config
 
--- --   tick ps = SSFA (\σ -> \(Just proc, t) ->
--- --      (σ, [((), (Just proc, advance proc ps t))]))
-
--- --   stepAnalysis config state = snd (ssf (mnext state) undefined config)
-
--- --   inject call = ((call, Map.empty), (Nothing, τ0))
+  inject call = ((call, Map.empty), (Nothing, σ0, τ0))
 
 ----------------------------------------------------------------------
  -- Example: KCFA from GenericAnalysis
