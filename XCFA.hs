@@ -226,13 +226,18 @@ data SingleStoreAnalysis st g b = SSFA {
 }
 
 -- Curry GenericAnalysis for the fixed guts
-instance Monad (SingleStoreAnalysis st g) where
+instance Lattice st => Monad (SingleStoreAnalysis st g) where
   (>>=) (SSFA f) g = SSFA (\st -> \guts -> 
-     let (st', pairs) = (f st guts)
-      -- TODO st'' - should merge the heap
-      in (st', concatMap (\(a, guts') -> snd ((ssf $ g(a)) st' guts')) pairs))
+     let (st', pairs) = (f st guts) -- make an f-step
+         -- get new results via g :: [(st, [(b, g)])]
+         newResults = List.map (\(a, guts') -> (ssf $ g(a)) st' guts')
+                               pairs
+         -- merge stores and concatenate the results :: (st, [(b, g)])
+         -- requires a lattice structure of a store
+      in foldl (\(s, bg) -> \(s', bg') -> (s ⊔ s', bg ++ bg'))
+               (st', []) newResults)
 
-  return a = SSFA (\s-> \guts -> (s, [(a,guts)]))
+  return a = SSFA (\s -> \guts -> (s, [(a,guts)]))
 
 -- Instance of the analysis for some particular guts
 -- instance (Addressable a t, Storable a s) 
