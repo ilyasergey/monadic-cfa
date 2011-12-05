@@ -360,10 +360,13 @@ abstractResult = explore ex
 abstractResultSS :: (Store KAddr, Set (PΣ KAddr, (ProcCh KAddr, KTime)))
 abstractResultSS = explore ex 
 
--- {-----------------------------------------------------------
--- More ideas: 
+{-----------------------------------------------------------
+More ideas: 
 
--- 1. Perhaps, introduce pre- and post-transition procedurec for fixpoint
--- computation management.
+1. Perhaps, introduce pre- and post-transition procedure 
+for fixpoint computation management (relevant for p.2)
 
--- -----------------------------------------------------------}
+2. Implement counting for the Gamma-CFA, instrumented for
+abstract garbage collection 
+
+----------------------------------------------------------
