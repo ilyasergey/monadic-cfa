@@ -349,13 +349,16 @@ ex   = Call comb [idx, idy]
 -- a particular analysis is chosen by the type specification
 
 -- concrete interpreter
-concreteResult = explore ex :: ((), Set (PΣ CAddr, (Store CAddr, Int)))
+concreteResult :: ((), Set (PΣ CAddr, (Store CAddr, Int)))
+concreteResult = explore ex 
 
 -- abstract interpreter with a single-threaded store
-abstractResult = explore ex :: ((), Set (PΣ KAddr, (ProcCh KAddr, Store KAddr, KTime)))
+abstractResult :: ((), Set (PΣ KAddr, (ProcCh KAddr, Store KAddr, KTime)))
+abstractResult = explore ex 
 
 -- abstract interpreter with a single-threaded store
-abstractResultSS = explore ex :: (Store KAddr, Set (PΣ KAddr, (ProcCh KAddr, KTime)))
+abstractResultSS :: (Store KAddr, Set (PΣ KAddr, (ProcCh KAddr, KTime)))
+abstractResultSS = explore ex 
 
 -- {-----------------------------------------------------------
 -- More ideas: 
