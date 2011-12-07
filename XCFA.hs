@@ -352,7 +352,7 @@ ex   = Call comb [idx, idy]
 concreteResult :: ((), Set (PΣ CAddr, (Store CAddr, Int)))
 concreteResult = explore ex 
 
--- abstract interpreter with a single-threaded store
+-- abstract interpreter with a per-state store
 abstractResult :: ((), Set (PΣ KAddr, (ProcCh KAddr, Store KAddr, KTime)))
 abstractResult = explore ex 
 
