@@ -95,7 +95,11 @@ class Monad (m s g) => Analysis a s g m | g->m, m->s where
   ($=) :: a -> (D a) -> m s g ()
  
   alloc :: Var -> m s g a
-  tick :: (PΣ a) -> m s g()
+  tick :: (PΣ a) -> m s g ()
+
+  -- Garbage Collection
+  -- By default is `return'
+  gc :: (PΣ a) -> m s g (PΣ a)
 
   stepAnalysis :: s -> g -> PΣ a -> (s, [(PΣ a, g)])
   inject :: CExp -> (PΣ a, s, g)
@@ -109,8 +113,8 @@ mnext ps@(Call f aes, ρ) = do
   ds <- mapM (arg ρ) aes 
   let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]
   sequence [ a $= d | a <- as | d <- ds ]
-  return $! (call', ρ'')
-mnext ps@(Exit, ρ) = return $! ps
+  gc $! (call', ρ'')
+mnext ps@(Exit, ρ) = gc $! ps
 
 ----------------------------------------------------------------------  
  -- Example: Concrete Semantics
@@ -155,7 +159,10 @@ instance Analysis CAddr
 
   stepAnalysis _ config state = ((), [cf (mnext state) config])
 
-  inject call = ((call, Map.empty), (), (bot, 0))               
+  inject call = ((call, Map.empty), (), (bot, 0))
+
+  -- default implementation
+  gc = return               
 
 ----------------------------------------------------------------------
  -- Addresses, Stores and Choices
@@ -177,6 +184,7 @@ class Lattice s => StoreLike a s | s->a where
   bind :: s -> a -> (D a)-> s
   replace :: s -> a -> (D a) -> s
   fetch :: s -> a -> (D a)
+  filterStore :: s -> (a -> Bool) -> s 
 
 ----------------------------------------------------------------------
  -- Generic analysis with no shared component
@@ -223,6 +231,9 @@ instance (Addressable a t, StoreLike a s)
   stepAnalysis _ config state = ((), gf (mnext state) config)
 
   inject call = ((call, Map.empty), (), (Nothing, σ0, τ0))
+  
+  -- default implementation 
+  gc = return
 
 ----------------------------------------------------------------------
  -- Single store-threading analysis.
@@ -279,6 +290,57 @@ instance (Addressable a t, StoreLike a s)
 
   inject call = ((call, Map.empty), σ0, (Nothing, τ0))
 
+  gc ps = SSFA (\σ -> \(ch,t) -> 
+        let rs = Set.map (\(v, a) -> a) (reachable ps σ)
+            σ' = filterStore σ (\a -> not (Set.member a rs))
+         in (σ', [(ps, (ch, t))]))
+
+----------------------------------------------------------------------
+ -- Abstract Garbage Collection
+----------------------------------------------------------------------
+
+-- Free Variables
+free' :: CExp -> Set Var -> Set Var
+free' Exit bound = Set.empty
+free' (Call f as) bound = foldl (\res -> \a -> res ⊔ (free a bound)) 
+                                (free f bound) as
+
+free :: AExp -> Set Var -> Set Var
+free (Ref v) bound = if (Set.member v bound) 
+                     then Set.empty 
+                     else Set.singleton v
+free (Lam (vs :=> ce)) bound = free' ce (bound ⊔ (Set.fromList vs))
+
+-- `touched' (for expressions and environments)
+touched' :: (Ord a) => AExp -> Env a -> Set (Var, a)
+touched' f ρ = Set.fromList [(v, ρ!v) | v <- Set.toList(free f Set.empty)] 
+
+-- `touched' for states
+touched :: (Ord a) => (PΣ a) -> Set (Var, a)
+touched (Call f as, ρ) = (touched' f ρ) ⊔ 
+                         Set.fromList [bs | a <- as, 
+                                            bs <- Set.toList (touched' a ρ)]
+touched (Exit, _) = Set.empty
+
+-- `adjacency'
+adjacent :: (Ord a, StoreLike a s) => (Var, a) -> s -> Set (Var, a)
+adjacent (v, addr) σ = Set.fromList [b | Clo (f, ρ) <- Set.toList(fetch σ addr),
+                                         b <- Set.toList (touched' (Lam f) ρ)]
+
+-- `reachability'
+reachable :: (Ord a, StoreLike a s) => (PΣ a) -> s -> Set (Var, a)
+reachable state σ = 
+  let collect bs =
+        -- fixpoint iteration
+        let newBindings = [b' | b  <- Set.toList bs, 
+                                b' <- Set.toList (adjacent b σ)]
+            newResult = bs ⊔ (Set.fromList newBindings)
+         in if newResult == bs
+            then bs
+            else collect newResult 
+   -- reflexive-transitive closure
+   in collect (touched state)
+                            
 ----------------------------------------------------------------------
  -- Example: KCFA from GenericAnalysis
 ----------------------------------------------------------------------
@@ -303,6 +365,7 @@ instance StoreLike KAddr (Store KAddr) where
  bind σ a d = σ ⨆ [a ==> d]
  fetch σ a = σ Main.!! a  
  replace σ a d = σ ⨆ [a ==> d]
+ filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
 
 ----------------------------------------------------------------------
  -- running the analysis
