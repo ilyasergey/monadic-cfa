@@ -1,6 +1,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 -- TODO: get rid of this
 {-# LANGUAGE UndecidableInstances #-}
@@ -97,15 +100,17 @@ class Monad (m s g) => Analysis a s g m | g->m, m->s where
   alloc :: Var -> m s g a
   tick :: (PΣ a) -> m s g ()
 
-  -- Garbage Collection
-  -- By default is `return'
-  gc :: (PΣ a) -> m s g (PΣ a)
-
   stepAnalysis :: s -> g -> PΣ a -> (s, [(PΣ a, g)])
   inject :: CExp -> (PΣ a, s, g)
 
+-- Abstract garbage collector
+class Monad m => GarbageCollector m a where
+  gc :: (PΣ a) -> m (PΣ a)
+  -- default implementation
+  gc = return
+
 -- Generic transition
-mnext :: Analysis a s g m => (PΣ a) -> m s g (PΣ a)
+mnext :: (Analysis a s g m, GarbageCollector (m s g) a) => (PΣ a) -> m s g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
@@ -161,8 +166,8 @@ instance Analysis CAddr
 
   inject call = ((call, Map.empty), (), (bot, 0))
 
-  -- default implementation
-  gc = return               
+-- Add Garbage Collection
+instance GarbageCollector (Concrete () (Store CAddr, Int)) CAddr
 
 ----------------------------------------------------------------------
  -- Addresses, Stores and Choices
@@ -231,10 +236,10 @@ instance (Addressable a t, StoreLike a s)
   stepAnalysis _ config state = ((), gf (mnext state) config)
 
   inject call = ((call, Map.empty), (), (Nothing, σ0, τ0))
-  
-  -- default implementation 
-  gc = return
 
+-- Garbage Collection
+instance GarbageCollector (GenericAnalysis () (ProcCh a, s, t)) a
+  
 ----------------------------------------------------------------------
  -- Single store-threading analysis.
 ----------------------------------------------------------------------
@@ -244,7 +249,6 @@ data StoreLike a s => SingleStoreAnalysis a s g b = SSFA {
 }
 
 -- TODO redefine store-like logic
-
 instance StoreLike a s => Monad (SingleStoreAnalysis a s g) where
   (>>=) (SSFA f) g = SSFA (\st -> \guts -> 
      let (st', pairs) = f st guts -- make an f-step
@@ -290,6 +294,9 @@ instance (Addressable a t, StoreLike a s)
 
   inject call = ((call, Map.empty), σ0, (Nothing, τ0))
 
+-- Enhance GC for single-store analysis
+instance (Addressable a t, StoreLike a s) 
+  => GarbageCollector ((SingleStoreAnalysis a) s (ProcCh a, t)) a where
   gc ps = SSFA (\σ -> \(ch,t) -> 
         let rs = Set.map (\(v, a) -> a) (reachable ps σ)
             σ' = filterStore σ (\a -> not (Set.member a rs))
@@ -359,6 +366,8 @@ instance Addressable KAddr KTime where
  advance proc (call, ρ) (KCalls calls) = 
   KCalls $ take k (call : calls) 
 
+-- Simple store
+
 instance StoreLike KAddr (Store KAddr) where
  σ0 = Map.empty  
 
@@ -366,6 +375,10 @@ instance StoreLike KAddr (Store KAddr) where
  fetch σ a = σ Main.!! a  
  replace σ a d = σ ⨆ [a ==> d]
  filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
+
+-- TODO provide another instance for the counter μ 
+-- counter should be nullified when filtered
+-- an incremented when `bind' is called
 
 ----------------------------------------------------------------------
  -- running the analysis
