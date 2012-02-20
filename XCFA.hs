@@ -47,7 +47,14 @@ instance Lattice () where
  x ⊔ y = top
  x ⊓ y = bot
  x ⊑ y = True
- 
+
+instance (Lattice a, Lattice b) => Lattice (a, b) where
+ bot = (bot, bot)
+ top = (top, top)
+ (a1, b1) ⊔ (a2, b2) = (a1 ⊔ a2, b1 ⊔ b2)
+ (a1, b1) ⊓ (a2, b2) = (a1 ⊓ a2, b1 ⊓ b2)
+ (a1, b1) ⊑ (a2, b2) = (a1 ⊑ a2) && (b1 ⊑ b2)
+
 instance (Ord s, Eq s) => Lattice (ℙ s) where
  bot = Set.empty
  top = error "no representation of universal set"
@@ -91,7 +98,7 @@ type Store a = a :-> (D a)
  -- 2. Guts define the shared component
  -- !! No more dependencies is needed
 
-class Monad (m s g) => Analysis a s g m | g->m, m->s where
+class Monad (m s g) => Analysis a s g m | g -> m, m -> s where
   fun :: (Env a) -> AExp -> m s g (Val a)
   arg :: (Env a) -> AExp -> m s g (D a)
 
@@ -274,18 +281,18 @@ instance (Addressable a t, StoreLike a s)
     let procs = fetch σ (ρ!v)
      in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
 
-  arg ρ (Lam l) = SSFA (\σ -> \(ch,t) -> 
+  arg ρ (Lam l) = SSFA (\σ -> \(ch, t) -> 
     let proc = Clo(l, ρ) 
      in (σ, [ (Set.singleton proc, (ch, t)) ]))
   arg ρ (Ref v) = SSFA (\σ -> \(ch, t) -> 
     let procs = fetch σ (ρ!v)
-     in (σ, [ (procs, (ch, t)) ]))
+     in (σ, [ (procs, (ch,t)) ]))
 
-  a $= d = SSFA (\σ -> \(ch,t) -> 
+  a $= d = SSFA (\σ -> \(ch, t) -> 
     let σ' = bind σ a d
-    in (σ', [((),(ch,t))] ))
+    in (σ', [((), (ch, t))] ))
 
-  alloc v = SSFA (\σ -> \(ch,t) -> (σ, [(valloc v t, (ch, t))]))
+  alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
 
   tick ps = SSFA (\σ -> \ (Just proc, t) ->
      (σ, ([((), (Just proc, advance proc ps t))])))
@@ -294,13 +301,15 @@ instance (Addressable a t, StoreLike a s)
 
   inject call = ((call, Map.empty), σ0, (Nothing, τ0))
 
+
 -- Enhance GC for single-store analysis
-instance (Addressable a t, StoreLike a s) 
-  => GarbageCollector ((SingleStoreAnalysis a) s (ProcCh a, t)) a where
-  gc ps = SSFA (\σ -> \(ch,t) -> 
+
+instance (Ord a, StoreLike a s) 
+  => GarbageCollector ((SingleStoreAnalysis a) s g) a where
+  gc ps = SSFA (\σ -> \g -> 
         let rs = Set.map (\(v, a) -> a) (reachable ps σ)
             σ' = filterStore σ (\a -> not (Set.member a rs))
-         in (σ', [(ps, (ch, t))]))
+         in (σ', [(ps, g)]))
 
 ----------------------------------------------------------------------
  -- Abstract Garbage Collection
@@ -347,7 +356,8 @@ reachable state σ =
             else collect newResult 
    -- reflexive-transitive closure
    in collect (touched state)
-                            
+
+
 ----------------------------------------------------------------------
  -- Example: KCFA from GenericAnalysis
 ----------------------------------------------------------------------
@@ -367,7 +377,6 @@ instance Addressable KAddr KTime where
   KCalls $ take k (call : calls) 
 
 -- Simple store
-
 instance StoreLike KAddr (Store KAddr) where
  σ0 = Map.empty  
 
@@ -376,9 +385,49 @@ instance StoreLike KAddr (Store KAddr) where
  replace σ a d = σ ⨆ [a ==> d]
  filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
 
--- TODO provide another instance for the counter μ 
--- counter should be nullified when filtered
--- an incremented when `bind' is called
+----------------------------------------------------------------------
+ -- Abstract Counting
+----------------------------------------------------------------------
+
+-- abstract counter
+data AbsNat = AZero | AOne | AMany
+     deriving (Ord, Eq, Show)
+
+-- abstract addition
+aplus :: AbsNat -> AbsNat -> AbsNat
+aplus AZero n = n
+aplus n AZero = n
+aplus n m = AMany
+
+instance Lattice AbsNat where
+ bot = AZero
+ top = AMany
+ n ⊑ m = (n == bot) || (m == top) || (n == m)
+ n ⊔ m = if (n ⊑ m) then m else n
+ n ⊓ m = if (n ⊑ m) then n else m
+
+class StoreLike a s => ACounter a s where
+  count :: s -> a -> AbsNat
+
+-- Counting store
+type StoreWithCount a = a :-> ((D a), AbsNat)
+
+-- counter is nullified when filtered
+-- and incremented when `bind' is called
+instance (Ord a) => StoreLike a (StoreWithCount a) where
+ σ0 = Map.empty  
+ bind σ a d = σ `update_add` [a ==> (d, AOne)]
+ fetch σ a = fst $ σ Main.!! a  
+ replace σ a d = σ ⨆ [a ==> (d, AZero)]
+ filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
+
+update_add :: (Ord k, Lattice v) => (k :-> (v, AbsNat)) -> [(k, (v, AbsNat))] -> (k :-> (v, AbsNat))
+update_add f [] = f
+update_add f ((k,v):tl) = Map.insertWith (\(x1, y1) -> \(x2, y2) -> (x1 ⊔ x2, y1 `aplus` y2)) k v (update_add f tl)
+
+instance (Ord a) => ACounter a (StoreWithCount a) where
+ -- fetching with default bottom
+ count σ a = snd $ σ Main.!! a         
 
 ----------------------------------------------------------------------
  -- running the analysis
@@ -422,27 +471,48 @@ idy  = Lam (["y"] :=> Exit)
 comb = Lam (["f", "g"] :=> Call (Ref "f") [Ref "g"])
 ex   = Call comb [idx, idy]
 
+ucombx = Lam (["x"] :=> Call (Ref "x") [Ref "x"])
+ucomby = Lam (["y"] :=> Call (Ref "y") [Ref "y"])
+omega = Call ucombx [ucomby]
+
 -- a particular analysis is chosen by the type specification
 
 -- concrete interpreter
-concreteResult :: ((), Set (PΣ CAddr, (Store CAddr, Int)))
-concreteResult = explore ex 
+type ConcreteGuts = (Store CAddr, Int)
+
+concreteResult :: CExp -> ((), Set (PΣ CAddr, ConcreteGuts))
+concreteResult = explore
 
 -- abstract interpreter with a per-state store
-abstractResult :: ((), Set (PΣ KAddr, (ProcCh KAddr, Store KAddr, KTime)))
-abstractResult = explore ex 
+type AbstractGuts = (ProcCh KAddr, Store KAddr, KTime)
 
+abstractResult :: CExp -> ((), Set (PΣ KAddr, AbstractGuts))
+abstractResult = explore 
+
+-- abstract interpreter with a per-state store and counting
+type AbstractGutsWithCounting = (ProcCh KAddr, StoreWithCount KAddr, KTime)
+
+abstractResultC :: CExp -> ((), Set (PΣ KAddr, AbstractGutsWithCounting))
+abstractResultC = explore 
+
+type AbstractGutsSS = (ProcCh KAddr, KTime)
 -- abstract interpreter with a single-threaded store
-abstractResultSS :: (Store KAddr, Set (PΣ KAddr, (ProcCh KAddr, KTime)))
-abstractResultSS = explore ex 
+-- Functional dependencies are in the conflict for same guts, 
+-- so only one analysis should be uncommented
+
+-- abstractResultSS :: CExp -> (Store KAddr, Set (PΣ KAddr, AbstractGutsSS))
+-- abstractResultSS = explore
+
+-- abstract interpreter with a single-threaded store and counting
+
+abstractResultSSC :: CExp -> (StoreWithCount KAddr, Set (PΣ KAddr, AbstractGutsSS))
+abstractResultSSC = explore  
+
 
 {-----------------------------------------------------------
 More ideas: 
 
 1. Perhaps, introduce pre- and post-transition procedure 
 for fixpoint computation management (relevant for p.2)
-
-2. Implement counting for the Gamma-CFA, instrumented for
-abstract garbage collection 
 
 ----------------------------------------------------------}
