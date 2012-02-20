@@ -98,7 +98,7 @@ type Store a = a :-> (D a)
  -- 2. Guts define the shared component
  -- !! No more dependencies is needed
 
-class Monad (m s g) => Analysis a s g m | g -> m, m -> s where
+class Monad (m s g) => Analysis m a s g | g->m, m->s, g->a where
   fun :: (Env a) -> AExp -> m s g (Val a)
   arg :: (Env a) -> AExp -> m s g (D a)
 
@@ -117,7 +117,7 @@ class Monad m => GarbageCollector m a where
   gc = return
 
 -- Generic transition
-mnext :: (Analysis a s g m, GarbageCollector (m s g) a) => (PΣ a) -> m s g (PΣ a)
+mnext :: (Analysis m a s g, GarbageCollector (m s g) a) => (PΣ a) -> m s g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
@@ -145,10 +145,11 @@ instance Monad (Concrete s g) where
      in (cf $ g(b)) guts')
   return b = Concrete (\guts -> (b, guts))
 
-instance Analysis CAddr 
+instance Analysis (Concrete) 
+                  CAddr 
                   ()
                   (Store CAddr, Int) 
-         (Concrete) where
+                  where
   fun ρ (Lam l) = Concrete (\ (σ,t) -> 
     let proc = Clo(l, ρ)
      in (proc,(σ,t)))
@@ -215,10 +216,11 @@ instance Monad (GenericAnalysis s g) where
   return a = GCFA (\ guts -> [(a,guts)])
 
 instance (Addressable a t, StoreLike a s) 
-   => Analysis a                -- address type
+   => Analysis (GenericAnalysis)
+               a                -- address type
                ()               -- no shared result
                (ProcCh a, s, t) -- Generic Analysis' guts
-               (GenericAnalysis) where
+               where
   fun ρ (Lam l) = GCFA (\ (_,σ,t) ->
     let proc = Clo(l, ρ) 
      in [ (proc, (Just proc,σ,t)) ])
@@ -270,10 +272,11 @@ instance StoreLike a s => Monad (SingleStoreAnalysis a s g) where
   return a = SSFA (\s -> \guts -> (s, [(a, guts)]))
 
 instance (Addressable a t, StoreLike a s) 
-   => Analysis a                     -- address type
+   => Analysis (SingleStoreAnalysis a) 
+               a                     -- address type
                s                     -- shared store
                (ProcCh a, t)         -- SingleStore Analysis' guts
-               (SingleStoreAnalysis a) where
+               where
   fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
     let proc = Clo(l, ρ) 
      in (σ, [(proc, (Just proc,t)) ]))
@@ -435,7 +438,7 @@ instance (Ord a) => ACounter a (StoreWithCount a) where
 
 -- Abstract state-space exploration algorithm
 -- TODO: remove step counting and trace output 
-loop :: (Analysis a s g m, Ord a, Ord g, Show a, Show g, Lattice s) =>
+loop :: (Analysis m a s g, Ord a, Ord g, Show a, Show g, Lattice s) =>
         [(PΣ a, g)] -> (s, Set (PΣ a, g)) -> Int -> (s, Set (PΣ a, g))
 
 loop worklist v@(shared, oldStates) step = 
@@ -454,7 +457,7 @@ loop worklist v@(shared, oldStates) step =
             in loop newWorkList newVisited (step + 1)
 
  -- compute an approximation
-explore :: (Analysis a s g m, Ord a, Ord g, Show a, Show g, Lattice s) => 
+explore :: (Analysis m a s g, Ord a, Ord g, Show a, Show g, Lattice s) => 
         CExp -> (s, Set (PΣ a, g))
 
 explore program = 
