@@ -117,7 +117,7 @@ class Monad m => GarbageCollector m a where
   gc = return
 
 -- Generic transition
-mnext :: (Analysis m a s g, GarbageCollector (m s g) a) => (PΣ a) -> m s g (PΣ a)
+mnext :: Analysis m a s g => (PΣ a) -> m s g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
@@ -125,8 +125,8 @@ mnext ps@(Call f aes, ρ) = do
   ds <- mapM (arg ρ) aes 
   let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]
   sequence [ a $= d | a <- as | d <- ds ]
-  gc $! (call', ρ'')
-mnext ps@(Exit, ρ) = gc $! ps
+  return $! (call', ρ'')
+mnext ps@(Exit, ρ) = return $! ps
 
 ----------------------------------------------------------------------  
  -- Example: Concrete Semantics
@@ -170,7 +170,7 @@ instance Analysis (Concrete)
 
   tick (call, ρ) = Concrete (\ (σ,n) -> ((), (σ, n+1)))
 
-  stepAnalysis _ config state = ((), [cf (mnext state) config])
+  stepAnalysis _ config state = ((), [cf (mnext state >>= gc) config])
 
   inject call = ((call, Map.empty), (), (bot, 0))
 
@@ -242,7 +242,7 @@ instance (Addressable a t, StoreLike a s)
   tick ps = GCFA (\ (Just proc, σ, t) ->
      [((), (Just proc, σ, advance proc ps t))])
 
-  stepAnalysis _ config state = ((), gf (mnext state) config)
+  stepAnalysis _ config state = ((), gf (mnext state >>= gc) config)
 
   inject call = ((call, Map.empty), (), (Nothing, σ0, τ0))
 
@@ -300,7 +300,7 @@ instance (Addressable a t, StoreLike a s)
   tick ps = SSFA (\σ -> \ (Just proc, t) ->
      (σ, ([((), (Just proc, advance proc ps t))])))
 
-  stepAnalysis store config state = runWithStore (mnext state) store config
+  stepAnalysis store config state = runWithStore (mnext state >>= gc) store config
 
   inject call = ((call, Map.empty), σ0, (Nothing, τ0))
 
