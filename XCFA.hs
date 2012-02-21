@@ -253,7 +253,7 @@ instance GarbageCollector (GenericAnalysis () (ProcCh a, s, t)) a
  -- Single store-threading analysis.
 ----------------------------------------------------------------------
   
-data StoreLike a s => SingleStoreAnalysis a s g b = SSFA {
+data SingleStoreAnalysis a s g b = SSFA {
   runWithStore :: s -> g -> (s, [(b, g)])
 }
 
@@ -262,8 +262,7 @@ instance StoreLike a s => Monad (SingleStoreAnalysis a s g) where
   (>>=) (SSFA f) g = SSFA (\st -> \guts -> 
      let (st', pairs) = f st guts -- make an f-step
          -- get new results via g :: [(st, [(b, g)])]
-         newResults = List.map (\(a, guts') -> (runWithStore $ g(a)) st' guts')
-                               pairs
+         newResults = List.map (\(a, guts') -> (runWithStore $ g(a)) st' guts') pairs
          -- merge stores and concatenate the results :: (st, [(b, g)])
          -- requires a lattice structure of a store
       in foldl (\(s, bg) -> \(s', bg') -> (s ⊔ s', bg ++ bg'))
