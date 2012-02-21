@@ -185,10 +185,10 @@ type ProcCh a = Maybe (Val a) -- Nondeterministic choice.
 
 -- FunctionalDependencies again:
 -- time defines addresses 
-class (Ord a, Eq a) => Addressable a t | t->a where
-  τ0 :: t
-  valloc :: Var -> t -> a 
-  advance :: Val a -> PΣ a -> t -> t 
+class (Ord a, Eq a) => Addressable a c | c->a where
+  τ0 :: c
+  valloc :: Var -> c -> a 
+  advance :: Val a -> PΣ a -> c -> c 
 
 -- and again:
 -- Store uniquely defines the type of its addresses
