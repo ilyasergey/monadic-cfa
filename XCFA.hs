@@ -185,14 +185,14 @@ type ProcCh a = Maybe (Val a) -- Nondeterministic choice.
 
 -- FunctionalDependencies again:
 -- time defines addresses 
-class (Ord a, Eq a) => Addressable a c | c->a where
+class (Ord a, Eq a) => Addressable a c | c -> a where
   τ0 :: c
   valloc :: Var -> c -> a 
   advance :: Val a -> PΣ a -> c -> c 
 
 -- and again:
 -- Store uniquely defines the type of its addresses
-class Lattice s => StoreLike a s | s->a where
+class Lattice s => StoreLike a s | s -> a where
   σ0 :: s
   bind :: s -> a -> (D a)-> s
   replace :: s -> a -> (D a) -> s
@@ -366,10 +366,10 @@ reachable state σ =
 
 k = 1
 
-data KAddr = KBind Var KTime
+data KTime = KCalls [CExp] 
   deriving (Eq, Ord, Show)
 
-data KTime = KCalls [CExp] 
+data KAddr = KBind Var KTime
   deriving (Eq, Ord, Show)
 
 instance Addressable KAddr KTime where
