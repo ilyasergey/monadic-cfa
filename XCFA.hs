@@ -192,7 +192,7 @@ class (Ord a, Eq a) => Addressable a c | c -> a where
 
 -- and again:
 -- Store uniquely defines the type of its addresses
-class Lattice s => StoreLike a s | s -> a where
+class (Eq a, Lattice s) => StoreLike a s | s -> a where
   σ0 :: s
   bind :: s -> a -> (D a)-> s
   replace :: s -> a -> (D a) -> s
