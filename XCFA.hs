@@ -132,18 +132,16 @@ mnext ps@(Exit, ρ) = return $! ps
  -- Example: Concrete Semantics
 ----------------------------------------------------------------------
 
-data Concrete s g b = Concrete { 
-    cf :: g -> (b, g)
-}
-
-data CAddr = CBind Var Int
-  deriving (Eq, Ord, Show)
+data Concrete s g b = Concrete { cf :: g -> (b, g) }
 
 instance Monad (Concrete s g) where
   (>>=) (Concrete f) g = Concrete (\guts ->
     let (b, guts') = f guts
      in (cf $ g(b)) guts')
   return b = Concrete (\guts -> (b, guts))
+
+data CAddr = CBind Var Int
+  deriving (Eq, Ord, Show)
 
 instance Analysis (Concrete) 
                   CAddr 
