@@ -391,15 +391,9 @@ instance StoreLike KAddr (Store KAddr) where
  -- Abstract Counting
 ----------------------------------------------------------------------
 
--- abstract counter
+-- Abstract natural number
 data AbsNat = AZero | AOne | AMany
      deriving (Ord, Eq, Show)
-
--- abstract addition
-aplus :: AbsNat -> AbsNat -> AbsNat
-aplus AZero n = n
-aplus n AZero = n
-aplus n m = AMany
 
 instance Lattice AbsNat where
  bot = AZero
@@ -408,11 +402,21 @@ instance Lattice AbsNat where
  n ⊔ m = if (n ⊑ m) then m else n
  n ⊓ m = if (n ⊑ m) then n else m
 
+-- Abstract addition
+(⊕) :: AbsNat -> AbsNat -> AbsNat
+AZero ⊕ n = n
+n ⊕ AZero = n
+n ⊕ m = AMany
+
 class StoreLike a s => ACounter a s where
   count :: s -> a -> AbsNat
 
 -- Counting store
 type StoreWithCount a = a :-> ((D a), AbsNat)
+
+instance (Ord a) => ACounter a (StoreWithCount a) where
+ -- fetching with default bottom
+ count σ a = snd $ σ Main.!! a         
 
 -- counter is nullified when filtered
 -- and incremented when `bind' is called
@@ -425,11 +429,7 @@ instance (Ord a) => StoreLike a (StoreWithCount a) where
 
 update_add :: (Ord k, Lattice v) => (k :-> (v, AbsNat)) -> [(k, (v, AbsNat))] -> (k :-> (v, AbsNat))
 update_add f [] = f
-update_add f ((k,v):tl) = Map.insertWith (\(x1, y1) -> \(x2, y2) -> (x1 ⊔ x2, y1 `aplus` y2)) k v (update_add f tl)
-
-instance (Ord a) => ACounter a (StoreWithCount a) where
- -- fetching with default bottom
- count σ a = snd $ σ Main.!! a         
+update_add f ((k,v):tl) = Map.insertWith (\(x1, y1) -> \(x2, y2) -> (x1 ⊔ x2, y1 ⊕ y2)) k v (update_add f tl)
 
 ----------------------------------------------------------------------
  -- running the analysis
