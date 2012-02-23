@@ -168,7 +168,7 @@ instance Analysis (Concrete)
 
   tick (call, ρ) = Concrete (\ (σ,n) -> ((), (σ, n+1)))
 
-  stepAnalysis _ config state = ((), [cf (mnext state >>= gc) config])
+  stepAnalysis _ config state = ((), [cf (mnext state) config])
 
   inject call = ((call, Map.empty), (), (bot, 0))
 
@@ -240,7 +240,7 @@ instance (Addressable a t, StoreLike a s)
   tick ps = GCFA (\ (Just proc, σ, t) ->
      [((), (Just proc, σ, advance proc ps t))])
 
-  stepAnalysis _ config state = ((), gf (mnext state >>= gc) config)
+  stepAnalysis _ config state = ((), gf (mnext state) config)
 
   inject call = ((call, Map.empty), (), (Nothing, σ0, τ0))
 
@@ -250,10 +250,8 @@ instance GarbageCollector (GenericAnalysis () (ProcCh a, s, t)) a
 ----------------------------------------------------------------------
  -- Single store-threading analysis.
 ----------------------------------------------------------------------
-  
-data SingleStoreAnalysis a s g b = SSFA {
-  runWithStore :: s -> g -> (s, [(b, g)])
-}
+ 
+data SingleStoreAnalysis a s g b = SSFA { runWithStore :: s -> g -> (s, [(b, g)]) }
 
 -- TODO redefine store-like logic
 instance StoreLike a s => Monad (SingleStoreAnalysis a s g) where
