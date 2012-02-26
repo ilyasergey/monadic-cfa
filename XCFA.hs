@@ -15,7 +15,6 @@ import CPS
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
-import Control.Monad.Fix
 
  -- debug
 import Debug.Trace
@@ -270,38 +269,38 @@ instance Lattice s => Monad (SingleStoreAnalysis a s g) where
 
   return a = SSFA (\s -> \guts -> (s, [(a, guts)]))
 
--- instance (Addressable a t, StoreLike a s) 
---    => Analysis (SingleStoreAnalysis a) 
---                a                     -- address type
---                s                     -- shared store
---                (ProcCh a, t)         -- SingleStore Analysis' guts
---                where
---   fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
---     let proc = Clo(l, ρ) 
---      in (σ, [(proc, (Just proc,t)) ]))
---   fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
---     let procs = fetch σ (ρ!v)
---      in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
+instance (Addressable a t, StoreLike a s) 
+   => Analysis (SingleStoreAnalysis a) 
+               a                     -- address type
+               s                     -- shared store
+               (ProcCh a, t)         -- SingleStore Analysis' guts
+               where
+  fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
+    let proc = Clo(l, ρ) 
+     in (σ, [(proc, (Just proc,t)) ]))
+  fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
+    let procs = fetch σ (ρ!v)
+     in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
 
---   arg ρ (Lam l) = SSFA (\σ -> \(ch, t) -> 
---     let proc = Clo(l, ρ) 
---      in (σ, [ (Set.singleton proc, (ch, t)) ]))
---   arg ρ (Ref v) = SSFA (\σ -> \(ch, t) -> 
---     let procs = fetch σ (ρ!v)
---      in (σ, [ (procs, (ch,t)) ]))
+  arg ρ (Lam l) = SSFA (\σ -> \(ch, t) -> 
+    let proc = Clo(l, ρ) 
+     in (σ, [ (Set.singleton proc, (ch, t)) ]))
+  arg ρ (Ref v) = SSFA (\σ -> \(ch, t) -> 
+    let procs = fetch σ (ρ!v)
+     in (σ, [ (procs, (ch,t)) ]))
 
---   a $= d = SSFA (\σ -> \(ch, t) -> 
---     let σ' = bind σ a d
---     in (σ', [((), (ch, t))] ))
+  a $= d = SSFA (\σ -> \(ch, t) -> 
+    let σ' = bind σ a d
+    in (σ', [((), (ch, t))] ))
 
---   alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
+  alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
 
---   tick ps = SSFA (\σ -> \ (Just proc, t) ->
---      (σ, ([((), (Just proc, advance proc ps t))])))
+  tick ps = SSFA (\σ -> \ (Just proc, t) ->
+     (σ, ([((), (Just proc, advance proc ps t))])))
 
---   stepAnalysis store config state = runWithStore (mnext state >>= gc) store config
+  stepAnalysis store config state = runWithStore (mnext state >>= gc) store config
 
---   inject call = ((call, Map.empty), σ0, (Nothing, τ0))
+  inject call = ((call, Map.empty), σ0, (Nothing, τ0))
 
 
 -- Enhance GC for single-store analysis
@@ -415,50 +414,7 @@ class StoreLike a s => AlkaliLike a s where
   deAnodizeD     :: s -> D a -> D a
   reset          :: s -> s
 
--- Shape analysis
-instance (Addressable a t, StoreLike a s, AlkaliLike a s) 
-   => Analysis (SingleStoreAnalysis a) 
-               a              
-               s
-               (ProcCh a, t)  
-               where
-  fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
-    let proc = Clo(l, ρ) 
-     in (σ, [(proc, (Just proc,t)) ]))
-  fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
-    let procs = fetch σ (ρ!v)
-     in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
-
-  arg ρ (Lam l) = SSFA (\σ -> \( ch, t) -> 
-    let proc = Clo(l, ρ) 
-     in (σ, [ (Set.singleton proc, (ch, t)) ]))
-  arg ρ (Ref v) = SSFA (\σ -> \( ch, t) -> 
-    let procs = fetch σ (ρ!v)
-     in (σ, [ (procs, (ch,t)) ]))
-
-  a $= d = SSFA (\σ -> \(ch, t) -> 
-    let σ' = deAnodizeStore σ 
-        σ'' = bind σ' a (deAnodizeD σ d)
-    in (σ'', [((), (ch, t))] ))
-
-  alloc v = SSFA (\σ -> \(ch, t) -> 
-    let addr = valloc v t
-        σ' = addUniqueAddr addr
-     in (σ', [(addr, (ch, t))]))
-
-  updateEnv ρ bs = SSFA (\σ -> \( ch, t) -> 
-    let ρ' = deAnodizeEnv σ ρ
-     in (σ, [ (ρ' // bs, (ch,t)) ]))
-
-  tick ps = SSFA (\σ -> \ (Just proc, t) ->
-     (σ, ([((), (Just proc, advance proc ps t))])))
-
-  stepAnalysis store config state = runWithStore (mnext state >>= gc) (reset store) config
-
-  inject call = ((call, Map.empty), σ0, (Nothing, τ0))
-
-
--- Particular implementation 
+-- a usefule instance
 instance (Ord a, StoreLike a s) => StoreLike a (s, ℙ a) where 
  σ0 = (σ0, Set.empty)
  bind σ a d = (bind (fst σ) a d, snd σ)
@@ -466,8 +422,54 @@ instance (Ord a, StoreLike a s) => StoreLike a (s, ℙ a) where
  replace σ a d = (replace (fst σ) a d, snd σ)
  filterStore σ p = (filterStore (fst σ) p, snd σ)
 
-instance (Ord a, StoreLike a s) => AlkaliLike a (s, ℙ a) where
--- TODO 
+-- Shape analysis
+-- instance (Addressable a t, StoreLike a s, AlkaliLike a s) 
+--    => Analysis (SingleStoreAnalysis a) 
+--                a              
+--                s
+--                (ProcCh a, t)  
+--                where
+--   fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
+--     let proc = Clo(l, ρ) 
+--      in (σ, [(proc, (Just proc,t)) ]))
+--   fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
+
+--   arg ρ (Lam l) = SSFA (\σ -> \( ch, t) -> 
+--     let proc = Clo(l, ρ) 
+--      in (σ, [ (Set.singleton proc, (ch, t)) ]))
+--   arg ρ (Ref v) = SSFA (\σ -> \( ch, t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in (σ, [ (procs, (ch,t)) ]))
+
+--   a $= d = SSFA (\σ -> \(ch, t) -> 
+--     let σ' = deAnodizeStore σ 
+--         σ'' = bind σ' a (deAnodizeD σ d)
+--     in (σ'', [((), (ch, t))] ))
+
+--   alloc v = SSFA (\σ -> \(ch, t) -> 
+--     let addr = valloc v t
+--         σ' = addUniqueAddr addr
+--      in (σ', [(addr, (ch, t))]))
+
+--   updateEnv ρ bs = SSFA (\σ -> \( ch, t) -> 
+--     let ρ' = deAnodizeEnv σ ρ
+--      in (σ, [ (ρ' // bs, (ch,t)) ]))
+
+--   tick ps = SSFA (\σ -> \ (Just proc, t) ->
+--      (σ, ([((), (Just proc, advance proc ps t))])))
+
+--   stepAnalysis store config state = runWithStore (mnext state >>= gc) (reset store) config
+
+--   inject call = ((call, Map.empty), σ0, (Nothing, τ0))
+
+
+-- Particular implementation of anodization
+----------------------------------------------------------------------
+
+
+-- instance (Ord a, StoreLike a s) => AlkaliLike a (s, ℙ a) where
   
 
 ----------------------------------------------------------------------
@@ -581,11 +583,11 @@ type AbstractGutsSS = (ProcCh KAddr, KTime)
 
 -- abstract interpreter with a single-threaded store and counting
 ----------------------------------------------------------------------
---abstractResultSSC :: CExp -> (StoreWithCount KAddr, Set (PΣ KAddr, AbstractGutsSS))
---abstractResultSSC = explore  
+abstractResultSSC :: CExp -> (StoreWithCount KAddr, Set (PΣ KAddr, AbstractGutsSS))
+abstractResultSSC = explore  
 
 
 -- abstract interpreter with a single-threaded store and shape analysis
 ----------------------------------------------------------------------
-abstractResultSh :: CExp -> ((Store KAddr, ℙ KAddr), Set (PΣ KAddr, AbstractGutsSS))
-abstractResultSh = explore  
+-- abstractResultSh :: CExp -> ((Store KAddr, ℙ KAddr), Set (PΣ KAddr, AbstractGutsSS))
+-- abstractResultSh = explore  
