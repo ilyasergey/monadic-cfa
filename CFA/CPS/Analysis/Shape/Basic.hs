@@ -5,9 +5,6 @@
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
--- TODO: get rid of this
-{-# LANGUAGE UndecidableInstances #-}
-
 module CFA.CPS.Analysis.Shape.Basic where
 
 import Data.Map as Map
@@ -20,3 +17,8 @@ import CFA.CFAMonads
 import CFA.CPS.Analysis
 
 instance (Ord a, StoreLike a s) => AlkaliLike a (s, ℙ a) where
+  addUniqueAddr  a = undefined
+  deAnodizeStore σ = undefined
+  deAnodizeEnv σ ρ = undefined
+  deAnodizeD  σ d = undefined
+  reset      σ = undefined
