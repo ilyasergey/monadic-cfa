@@ -98,11 +98,15 @@ type Store a = a :-> (D a)
  -- 2. Guts define the shared component
  -- !! No more dependencies is needed
 
-class Monad (m s g) => Analysis m a s g | g->m, m->s, g->a where
+class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where
   fun :: (Env a) -> AExp -> m s g (Val a)
   arg :: (Env a) -> AExp -> m s g (D a)
 
   ($=) :: a -> (D a) -> m s g ()
+
+  updateEnv :: Env a -> [(Var, a)] ->  m s g (Env a)
+  -- default implementation
+  updateEnv ρ bs = return $ ρ // bs
  
   alloc :: Var -> m s g a
   tick :: (PΣ a) -> m s g ()
@@ -121,9 +125,9 @@ mnext :: Analysis m a s g => (PΣ a) -> m s g (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick ps
-  as <- mapM alloc vs
-  ds <- mapM (arg ρ) aes 
-  let ρ'' = ρ' // [ v ==> a | v <- vs | a <- as ]
+  as  <- mapM alloc vs
+  ds  <- mapM (arg ρ) aes 
+  ρ'' <- updateEnv ρ' [ v ==> a | v <- vs | a <- as ]
   sequence [ a $= d | a <- as | d <- ds ]
   return $! (call', ρ'')
 mnext ps@(Exit, ρ) = return $! ps
@@ -254,7 +258,7 @@ instance GarbageCollector (GenericAnalysis () (ProcCh a, s, t)) a
 data SingleStoreAnalysis a s g b = SSFA { runWithStore :: s -> g -> (s, [(b, g)]) }
 
 -- TODO redefine store-like logic
-instance StoreLike a s => Monad (SingleStoreAnalysis a s g) where
+instance Lattice s => Monad (SingleStoreAnalysis a s g) where
   (>>=) (SSFA f) g = SSFA (\st -> \guts -> 
      let (st', pairs) = f st guts -- make an f-step
          -- get new results via g :: [(st, [(b, g)])]
@@ -266,38 +270,38 @@ instance StoreLike a s => Monad (SingleStoreAnalysis a s g) where
 
   return a = SSFA (\s -> \guts -> (s, [(a, guts)]))
 
-instance (Addressable a t, StoreLike a s) 
-   => Analysis (SingleStoreAnalysis a) 
-               a                     -- address type
-               s                     -- shared store
-               (ProcCh a, t)         -- SingleStore Analysis' guts
-               where
-  fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
-    let proc = Clo(l, ρ) 
-     in (σ, [(proc, (Just proc,t)) ]))
-  fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
-    let procs = fetch σ (ρ!v)
-     in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
+-- instance (Addressable a t, StoreLike a s) 
+--    => Analysis (SingleStoreAnalysis a) 
+--                a                     -- address type
+--                s                     -- shared store
+--                (ProcCh a, t)         -- SingleStore Analysis' guts
+--                where
+--   fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
+--     let proc = Clo(l, ρ) 
+--      in (σ, [(proc, (Just proc,t)) ]))
+--   fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
 
-  arg ρ (Lam l) = SSFA (\σ -> \(ch, t) -> 
-    let proc = Clo(l, ρ) 
-     in (σ, [ (Set.singleton proc, (ch, t)) ]))
-  arg ρ (Ref v) = SSFA (\σ -> \(ch, t) -> 
-    let procs = fetch σ (ρ!v)
-     in (σ, [ (procs, (ch,t)) ]))
+--   arg ρ (Lam l) = SSFA (\σ -> \(ch, t) -> 
+--     let proc = Clo(l, ρ) 
+--      in (σ, [ (Set.singleton proc, (ch, t)) ]))
+--   arg ρ (Ref v) = SSFA (\σ -> \(ch, t) -> 
+--     let procs = fetch σ (ρ!v)
+--      in (σ, [ (procs, (ch,t)) ]))
 
-  a $= d = SSFA (\σ -> \(ch, t) -> 
-    let σ' = bind σ a d
-    in (σ', [((), (ch, t))] ))
+--   a $= d = SSFA (\σ -> \(ch, t) -> 
+--     let σ' = bind σ a d
+--     in (σ', [((), (ch, t))] ))
 
-  alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
+--   alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
 
-  tick ps = SSFA (\σ -> \ (Just proc, t) ->
-     (σ, ([((), (Just proc, advance proc ps t))])))
+--   tick ps = SSFA (\σ -> \ (Just proc, t) ->
+--      (σ, ([((), (Just proc, advance proc ps t))])))
 
-  stepAnalysis store config state = runWithStore (mnext state >>= gc) store config
+--   stepAnalysis store config state = runWithStore (mnext state >>= gc) store config
 
-  inject call = ((call, Map.empty), σ0, (Nothing, τ0))
+--   inject call = ((call, Map.empty), σ0, (Nothing, τ0))
 
 
 -- Enhance GC for single-store analysis
@@ -357,33 +361,6 @@ reachable state σ =
 
 
 ----------------------------------------------------------------------
- -- Example: KCFA from GenericAnalysis
-----------------------------------------------------------------------
-
-k = 1
-
-data KTime = KCalls [CExp] 
-  deriving (Eq, Ord, Show)
-
-data KAddr = KBind Var KTime
-  deriving (Eq, Ord, Show)
-
-instance Addressable KAddr KTime where
- τ0 = KCalls []
- valloc v t = KBind v t
- advance proc (call, ρ) (KCalls calls) = 
-  KCalls $ take k (call : calls) 
-
--- Simple store
-instance StoreLike KAddr (Store KAddr) where
- σ0 = Map.empty  
-
- bind σ a d = σ ⨆ [a ==> d]
- fetch σ a = σ Main.!! a  
- replace σ a d = σ ⨆ [a ==> d]
- filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
-
-----------------------------------------------------------------------
  -- Abstract Counting
 ----------------------------------------------------------------------
 
@@ -428,7 +405,101 @@ update_add f [] = f
 update_add f ((k,v):tl) = Map.insertWith (\(x1, y1) -> \(x2, y2) -> (x1 ⊔ x2, y1 ⊕ y2)) k v (update_add f tl)
 
 ----------------------------------------------------------------------
- -- running the analysis
+ -- Anodization
+----------------------------------------------------------------------
+
+class StoreLike a s => AlkaliLike a s where
+  addUniqueAddr  :: a -> s
+  deAnodizeStore :: s -> s 
+  deAnodizeEnv   :: s -> Env a -> Env a
+  deAnodizeD     :: s -> D a -> D a
+  reset          :: s -> s
+
+-- Shape analysis
+instance (Addressable a t, StoreLike a s, AlkaliLike a s) 
+   => Analysis (SingleStoreAnalysis a) 
+               a              
+               s
+               (ProcCh a, t)  
+               where
+  fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
+    let proc = Clo(l, ρ) 
+     in (σ, [(proc, (Just proc,t)) ]))
+  fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
+    let procs = fetch σ (ρ!v)
+     in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
+
+  arg ρ (Lam l) = SSFA (\σ -> \( ch, t) -> 
+    let proc = Clo(l, ρ) 
+     in (σ, [ (Set.singleton proc, (ch, t)) ]))
+  arg ρ (Ref v) = SSFA (\σ -> \( ch, t) -> 
+    let procs = fetch σ (ρ!v)
+     in (σ, [ (procs, (ch,t)) ]))
+
+  a $= d = SSFA (\σ -> \(ch, t) -> 
+    let σ' = deAnodizeStore σ 
+        σ'' = bind σ' a (deAnodizeD σ d)
+    in (σ'', [((), (ch, t))] ))
+
+  alloc v = SSFA (\σ -> \(ch, t) -> 
+    let addr = valloc v t
+        σ' = addUniqueAddr addr
+     in (σ', [(addr, (ch, t))]))
+
+  updateEnv ρ bs = SSFA (\σ -> \( ch, t) -> 
+    let ρ' = deAnodizeEnv σ ρ
+     in (σ, [ (ρ' // bs, (ch,t)) ]))
+
+  tick ps = SSFA (\σ -> \ (Just proc, t) ->
+     (σ, ([((), (Just proc, advance proc ps t))])))
+
+  stepAnalysis store config state = runWithStore (mnext state >>= gc) (reset store) config
+
+  inject call = ((call, Map.empty), σ0, (Nothing, τ0))
+
+
+-- Particular implementation 
+instance (Ord a, StoreLike a s) => StoreLike a (s, ℙ a) where 
+ σ0 = (σ0, Set.empty)
+ bind σ a d = (bind (fst σ) a d, snd σ)
+ fetch σ a = fetch (fst σ) a 
+ replace σ a d = (replace (fst σ) a d, snd σ)
+ filterStore σ p = (filterStore (fst σ) p, snd σ)
+
+instance (Ord a, StoreLike a s) => AlkaliLike a (s, ℙ a) where
+-- TODO 
+  
+
+----------------------------------------------------------------------
+ -- KCFA addresses and stores
+----------------------------------------------------------------------
+
+k = 1
+
+data KTime = KCalls [CExp] 
+  deriving (Eq, Ord, Show)
+
+data KAddr = KBind Var KTime
+  deriving (Eq, Ord, Show)
+
+instance Addressable KAddr KTime where
+ τ0 = KCalls []
+ valloc v t = KBind v t
+ advance proc (call, ρ) (KCalls calls) = 
+  KCalls $ take k (call : calls) 
+
+-- Simple store
+instance StoreLike KAddr (Store KAddr) where
+ σ0 = Map.empty  
+
+ bind σ a d = σ ⨆ [a ==> d]
+ fetch σ a = σ Main.!! a  
+ replace σ a d = σ ⨆ [a ==> d]
+ filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
+
+
+----------------------------------------------------------------------
+ -- Running the analysis
 ----------------------------------------------------------------------
 
 -- Abstract state-space exploration algorithm
@@ -476,41 +547,45 @@ omega = Call ucombx [ucomby]
 -- a particular analysis is chosen by the type specification
 
 -- concrete interpreter
+----------------------------------------------------------------------
 type ConcreteGuts = (Store CAddr, Int)
 
 concreteResult :: CExp -> ((), Set (PΣ CAddr, ConcreteGuts))
 concreteResult = explore
 
 -- abstract interpreter with a per-state store
+----------------------------------------------------------------------
 type AbstractGuts = (ProcCh KAddr, Store KAddr, KTime)
 
 abstractResult :: CExp -> ((), Set (PΣ KAddr, AbstractGuts))
 abstractResult = explore 
 
 -- abstract interpreter with a per-state store and counting
+----------------------------------------------------------------------
 type AbstractGutsWithCounting = (ProcCh KAddr, StoreWithCount KAddr, KTime)
 
 abstractResultC :: CExp -> ((), Set (PΣ KAddr, AbstractGutsWithCounting))
 abstractResultC = explore 
 
 type AbstractGutsSS = (ProcCh KAddr, KTime)
--- abstract interpreter with a single-threaded store
+
+----------------------------------------------------------------------
 -- Functional dependencies are in the conflict for same guts, 
 -- so only one analysis should be uncommented
+----------------------------------------------------------------------
 
+-- abstract interpreter with a single-threaded store
+----------------------------------------------------------------------
 -- abstractResultSS :: CExp -> (Store KAddr, Set (PΣ KAddr, AbstractGutsSS))
 -- abstractResultSS = explore
 
 -- abstract interpreter with a single-threaded store and counting
+----------------------------------------------------------------------
+--abstractResultSSC :: CExp -> (StoreWithCount KAddr, Set (PΣ KAddr, AbstractGutsSS))
+--abstractResultSSC = explore  
 
-abstractResultSSC :: CExp -> (StoreWithCount KAddr, Set (PΣ KAddr, AbstractGutsSS))
-abstractResultSSC = explore  
 
-
-{-----------------------------------------------------------
-More ideas: 
-
-1. Perhaps, introduce pre- and post-transition procedure 
-for fixpoint computation management (relevant for p.2)
-
-----------------------------------------------------------}
+-- abstract interpreter with a single-threaded store and shape analysis
+----------------------------------------------------------------------
+abstractResultSh :: CExp -> ((Store KAddr, ℙ KAddr), Set (PΣ KAddr, AbstractGutsSS))
+abstractResultSh = explore  
