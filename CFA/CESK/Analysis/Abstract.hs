@@ -2,6 +2,8 @@
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
@@ -12,68 +14,72 @@ import Data.Map as Map
 import Data.Set as Set
 
 import CFA.Lattice
+import CFA.CFAMonads
 import CFA.Store
 
 import CFA.CESK
 import CFA.CESK.Analysis
 
+----------------------------------------------------------------------  
+-- ABSTRACT INTERPRETATION
+----------------------------------------------------------------------  
 
+type D a = ℙ (Storable a)
 
-{---------------- ABSTRACT INTERPRETATION ----------------}
-
-data KCFA a = KCFA { kf :: !((Time, State Addr, AStore) -> [(a, Time, State Addr, AStore)]) }
-
---TODO is it possible to abstract over the list structure?
-type D1 = (ℙ D)
-
-type AStore = Addr :-> D1
-
-k = 1
-
-instance Monad KCFA where
-   return a = KCFA (\(t, s, σ) -> [(a, t, s, σ)]) 
-   (>>=) (KCFA f) g = KCFA (\ (t, s, σ) ->
-     let chs = f(t, s, σ)
-      in concatMap (\ (a, t', s', σ') -> (kf $ g(a))(t', s', σ')) chs)
-
-instance Analysis KCFA Addr where
-  tick ctx@(Ref (_, _), ρ, a) = KCFA (\(t, s, σ) -> [((), t, ctx, σ)])
-  tick ctx@(App (_, _, l), ρ, a) = KCFA (\(t, s, σ) -> [((), TLab l (contour t), ctx, σ)])
-  tick ctx@(v, ρ, a) = KCFA (\(TLab l ctr, s, σ) -> 
+instance (StoreLike Addr s (D Addr), Truncatable Time) 
+   => Analysis (GenericAnalysis)
+               Addr                        -- address type
+               ()                          -- no shared result
+               (Time, State Addr, s)       -- Generic Analysis' guts
+               where
+  tick ctx@(Ref (_, _), ρ, a) = GCFA (\(t, s, σ) -> [((), (t, ctx, σ))])
+  tick ctx@(App (_, _, l), ρ, a) = GCFA (\(t, s, σ) -> [((), (TLab l (contour t), ctx, σ))])
+  tick ctx@(v, ρ, a) = GCFA (\(TLab l ctr, s, σ) -> 
                        [case κ of 
-                           Ar _ -> ((), TLab l ctr, ctx, σ)
-                           Fn _ -> ((), TMt (take k (l : ctr)), ctx, σ) 
-                        | Cont κ <- Set.toList (σ ! a)])
+                           Ar _ -> ((), (TLab l ctr, ctx, σ))
+                           Fn _ -> ((), (trunc $ TMt (l : ctr), ctx, σ)) 
+                        | Cont κ <- Set.toList $ fetch σ a])
 
-  getVar ρ x   = KCFA (\(t, s, σ) -> 
-                  let clos = σ ! (ρ ! x)
-                   in [(clo, t, s, σ) | Val clo <- Set.toList clos])
+  getVar ρ x   = GCFA (\(t, s, σ) -> 
+                  let clos = fetch σ (ρ ! x)
+                   in [(clo, (t, s, σ)) | Val clo <- Set.toList clos])
 
-  putVar ρ x c = KCFA (\(t, s, σ) -> do
-                  b <- allocKCFA t s σ
+  putVar ρ x b c = GCFA (\(t, s, σ) -> do
                   let d  = (Set.singleton (Val c))
-                      σ' = σ ⊎ [b ==> d]
+                      σ' = bind σ b d
                       ρ' = ρ // [(x, b)]
-                  return (ρ', t, s, σ'))
+                  return (ρ', (t, s, σ')))
 
-  loadCont a   = KCFA (\(t, s, σ) -> 
-                  let ks = σ ! a
-                   in [(κ, t, s, σ) | Cont κ <- Set.toList ks])
+  loadCont a   = GCFA (\(t, s, σ) -> 
+                  let ks = fetch σ a
+                   in [(κ, (t, s, σ)) | Cont κ <- Set.toList ks])
 
-  storeCont κ  = KCFA (\(t, s, σ) -> do
-                  b <- allocKCFA t s σ
+  storeCont b κ  = GCFA (\(t, s, σ) -> do
                   let d  = (Set.singleton (Cont κ))
-                      σ' = σ ⊎ [b ==> d]
-                  return (b, t, s, σ'))
+                      σ' = bind σ b d
+                  return ((), (t, s, σ')))
+
+  alloc _       = GCFA (\(t, s, σ) -> do
+                  [(a, (t, s, σ)) | a <- allocKCFA t s σ])
+
 
 -- abstract allocator function
--- similar to the concrete allocator
 -- nondeterministic because of stored continuations
-allocKCFA :: Time -> State Addr -> AStore -> [Addr]
+allocKCFA :: StoreLike Addr s (D Addr) => Time -> State Addr -> s -> [Addr]
 allocKCFA t (App (e0, _, _), _ ,_) σ = [Call (lab e0) (contour t)]
 allocKCFA t (Lam _, _, a) σ = 
       [case κ of
             Ar (e, _, _)      -> Call (lab e) (contour t)
             Fn ((x, _), _, _) -> Bind x (contour t) 
-       | Cont κ <- Set.toList (σ ! a)]
+       | Cont κ <- Set.toList $ fetch σ  a]
+
+
+instance Truncatable Time where
+  trunc (TMt (lab:ls))= TMt ls
+  trunc t = t
+
+instance GarbageCollector (GenericAnalysis () (Time, State Addr, s)) (State Addr)
+
+type Store a = a :-> (D a)
+
 

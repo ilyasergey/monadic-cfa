@@ -23,9 +23,11 @@ import CFA.CESK
 class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where 
   tick      :: State a -> m s g ()
   getVar    :: Env a -> Var -> m s g (Clo a)
-  putVar    :: Env a -> Var -> Clo a -> m s g (Env a)
+  putVar    :: Env a -> Var -> a -> Clo a -> m s g (Env a)
   loadCont  :: a -> m s g (Kont a)
-  storeCont :: Kont a -> m s g a
+  storeCont :: a -> Kont a -> m s g ()
+  alloc     :: () -> m s g a
+
 
 -- A small-step monadic semantics for CESK* machine
 -- in Store- and Time- passing style
@@ -44,15 +46,25 @@ mstep ctx@(Ref (x, l), ρ, a) = do
   return $! (Lam (v, l), ρ', a)
 mstep ctx@(App (e0, e1, l), ρ, a) = do
   tick ctx
-  b <- storeCont (Ar (e1, ρ, a))
+  b <- alloc ()
+  storeCont b (Ar (e1, ρ, a))
   return (e0, ρ, b)
 mstep ctx@(Lam (v, l), ρ, a) = do
   tick ctx
   κ <- loadCont a
   case κ of
     Ar (e, ρ, a) -> do
-      b <- storeCont κ
+      b <- alloc ()
+      storeCont b κ
       return (e, ρ, b)
     Fn ((x, e), ρ', c) -> do
-      ρ'' <- putVar ρ' x (Clo (v, ρ, l))
+      b <- alloc ()
+      ρ'' <- putVar ρ' x b (Clo (v, ρ, l))
       return (e, ρ'', c)
+
+----------------------------------------------------------------------
+ -- Utility
+----------------------------------------------------------------------
+
+class Truncatable t where
+  trunc :: t -> t

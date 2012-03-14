@@ -60,3 +60,5 @@ instance Lattice s => Monad (SingleStoreAnalysis a s g) where
                (st', []) newResults)
 
   return a = SSFA (\s -> \guts -> (s, [(a, guts)]))
+
+
