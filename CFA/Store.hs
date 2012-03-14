@@ -21,6 +21,16 @@ class (Eq a, Lattice s, Lattice d) => StoreLike a s d | s->a, s->d where
   filterStore :: s -> (a -> Bool) -> s 
 
 ----------------------------------------------------------------------
+ -- Abstract Garbage Collection
+----------------------------------------------------------------------
+
+-- Abstract garbage collector
+class Monad m => GarbageCollector m a where
+  gc :: a -> m a
+  -- default implementation
+  gc = return
+
+----------------------------------------------------------------------
  -- Abstract Counting
 ----------------------------------------------------------------------
 
@@ -63,3 +73,4 @@ instance (Ord a, Lattice d) => StoreLike a (StoreWithCount a d) d where
 update_add :: (Ord k, Lattice v) => (k :-> (v, AbsNat)) -> [(k, (v, AbsNat))] -> (k :-> (v, AbsNat))
 update_add f [] = f
 update_add f ((k,v):tl) = Map.insertWith (\(x1, y1) -> \(x2, y2) -> (x1 ⊔ x2, y1 ⊕ y2)) k v (update_add f tl)
+

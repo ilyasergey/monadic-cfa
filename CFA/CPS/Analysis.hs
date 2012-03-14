@@ -75,14 +75,8 @@ class (Ord a, Eq a) => Addressable a c | c -> a where
   advance :: Val a -> PΣ a -> c -> c 
 
 ----------------------------------------------------------------------
- -- Abstract Garbage Collection
+ -- GC Machinery
 ----------------------------------------------------------------------
-
--- Abstract garbage collector
-class Monad m => GarbageCollector m a where
-  gc :: (PΣ a) -> m (PΣ a)
-  -- default implementation
-  gc = return
 
 -- Free Variables
 free' :: CExp -> Set Var -> Set Var

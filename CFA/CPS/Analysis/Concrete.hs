@@ -16,6 +16,7 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
 
@@ -52,5 +53,5 @@ instance Analysis (Concrete)
   inject call = ((call, Map.empty), (), (bot, 0))
 
 -- Add Garbage Collection
-instance GarbageCollector (Concrete () (Store CAddr, Int)) CAddr
+instance GarbageCollector (Concrete () (Store CAddr, Int)) (PΣ CAddr)
 

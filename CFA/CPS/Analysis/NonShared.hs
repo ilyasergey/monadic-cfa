@@ -52,4 +52,4 @@ instance (Addressable a t, StoreLike a s (D a))
   inject call = ((call, Map.empty), (), (Nothing, σ0, τ0))
 
 -- Garbage Collection
-instance GarbageCollector (GenericAnalysis () (ProcCh a, s, t)) a
+instance GarbageCollector (GenericAnalysis () (ProcCh a, s, t)) (PΣ a)

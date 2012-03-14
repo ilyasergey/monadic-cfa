@@ -21,7 +21,7 @@ import CFA.CFAMonads
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.SingleStore.SingleStoreGC
 
-instance (Addressable a t, StoreLike a s (D a), GarbageCollector ((SingleStoreAnalysis a) s g) a) 
+instance (Addressable a t, StoreLike a s (D a), GarbageCollector ((SingleStoreAnalysis a) s g) (PΣ a)) 
    => Analysis (SingleStoreAnalysis a) 
                a                     -- address type
                s                     -- shared store
