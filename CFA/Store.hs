@@ -15,7 +15,7 @@ import CFA.Lattice
 -- Store uniquely defines the type of its addresses
 class (Eq a, Lattice s, Lattice d) => StoreLike a s d | s->a, s->d where
   σ0 :: s
-  bind :: s -> a -> d-> s
+  bind :: s -> a -> d -> s
   replace :: s -> a -> d -> s
   fetch :: s -> a -> d
   filterStore :: s -> (a -> Bool) -> s 

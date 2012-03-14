@@ -6,13 +6,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module CFA.CESK where
+module CFA.CESK.Analysis where
 
 -- Imports.
 import Data.Map as Map
 import Data.Set as Set
 
 import CFA.Lattice
+import CFA.Store
 
 {---------------- SYNTAX AND STATE-SPACE ----------------}
 

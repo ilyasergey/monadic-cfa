@@ -22,6 +22,10 @@ type ℙ a = Set.Set a
 (//) f [] = f
 (//) f ((x,y):tl) = Map.insert x y (f // tl)
 
+(⊎) :: (Ord k, Lattice v) => (k :-> v) -> [(k,v)] -> (k :-> v)
+f ⊎ [] = f
+f ⊎ ((k,v):tl) = Map.insertWith (⊔) k v (f ⊎ tl)
+
 
  -- Partial order theory.
 class Lattice a where
