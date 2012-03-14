@@ -6,6 +6,8 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
+
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.Runner
 
@@ -37,5 +39,5 @@ instance KCFA KTime where
 
 type AbstractGutsSS = (ProcCh KAddr, KTime)
 
-abstractResultSSC :: CExp -> (StoreWithCount KAddr, Set (PΣ KAddr, AbstractGutsSS))
+abstractResultSSC :: CExp -> (StoreWithCount KAddr (D KAddr), Set (PΣ KAddr, AbstractGutsSS))
 abstractResultSSC = explore  

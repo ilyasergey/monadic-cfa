@@ -6,6 +6,7 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.Runner
 
@@ -35,7 +36,7 @@ omega = Call ucombx [ucomby]
 instance KCFA KTime where
   getK = const 1
 
-type AbstractGutsWithCounting = (ProcCh KAddr, StoreWithCount KAddr, KTime)
+type AbstractGutsWithCounting = (ProcCh KAddr, StoreWithCount KAddr (D KAddr), KTime)
 
 abstractResultC :: CExp -> ((), Set (PΣ KAddr, AbstractGutsWithCounting))
 abstractResultC = explore 

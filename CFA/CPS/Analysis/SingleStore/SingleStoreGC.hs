@@ -16,10 +16,11 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
 
-instance (Ord a, StoreLike a s) 
+instance (Ord a, StoreLike a s (D a)) 
   => GarbageCollector ((SingleStoreAnalysis a) s g) a where
   gc ps = SSFA (\σ -> \g -> 
         let rs = Set.map (\(v, a) -> a) (reachable ps σ)

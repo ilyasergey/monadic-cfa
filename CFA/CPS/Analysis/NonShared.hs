@@ -16,10 +16,11 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
 
-instance (Addressable a t, StoreLike a s) 
+instance (Addressable a t, StoreLike a s (D a)) 
    => Analysis (GenericAnalysis)
                a                -- address type
                ()               -- no shared result

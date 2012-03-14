@@ -13,10 +13,12 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
+
 import CFA.CFAMonads
 import CFA.CPS.Analysis
 
-instance (Ord a, StoreLike a s) => AlkaliLike a (s, ℙ a) where
+instance (Ord a, StoreLike a s d) => AlkaliLike a (s, ℙ a) d where
   addUniqueAddr  a = undefined
   deAnodizeStore σ = undefined
   deAnodizeEnv σ ρ = undefined

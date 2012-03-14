@@ -11,6 +11,7 @@ import Data.Map as Map
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
 import CFA.CPS.Analysis
 
 
@@ -30,7 +31,7 @@ instance (KCFA KTime) => Addressable KAddr KTime where
   KCalls $ take (getK t) (call : calls) 
 
 -- Simple store
-instance StoreLike KAddr (Store KAddr) where
+instance StoreLike KAddr (Store KAddr) (D KAddr) where
  σ0 = Map.empty  
 
  bind σ a d = σ ⨆ [a ==> d]

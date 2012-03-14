@@ -16,12 +16,14 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
 import CFA.CFAMonads
+
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.SingleStore.SingleStoreGC
 
 -- Shape analysis
-instance (Addressable a t, StoreLike a s, AlkaliLike a s) 
+instance (Addressable a t, StoreLike a s (D a), AlkaliLike a s (D a)) 
    => Analysis (SingleStoreAnalysis a) 
                a              
                s

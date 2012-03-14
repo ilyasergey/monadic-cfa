@@ -16,11 +16,12 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.SingleStore.SingleStoreGC
 
-instance (Addressable a t, StoreLike a s, GarbageCollector ((SingleStoreAnalysis a) s g) a) 
+instance (Addressable a t, StoreLike a s (D a), GarbageCollector ((SingleStoreAnalysis a) s g) a) 
    => Analysis (SingleStoreAnalysis a) 
                a                     -- address type
                s                     -- shared store

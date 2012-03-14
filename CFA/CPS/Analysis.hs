@@ -1,5 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ParallelListComp #-}
@@ -16,6 +17,7 @@ import Data.List as List
 
 import CFA.CPS
 import CFA.Lattice
+import CFA.Store
 
 ----------------------------------------------------------------------  
 -- Abstract analysis interface.
@@ -72,15 +74,6 @@ class (Ord a, Eq a) => Addressable a c | c -> a where
   valloc :: Var -> c -> a 
   advance :: Val a -> PΣ a -> c -> c 
 
--- and again:
--- Store uniquely defines the type of its addresses
-class (Eq a, Lattice s) => StoreLike a s | s -> a where
-  σ0 :: s
-  bind :: s -> a -> (D a)-> s
-  replace :: s -> a -> (D a) -> s
-  fetch :: s -> a -> (D a)
-  filterStore :: s -> (a -> Bool) -> s 
-
 ----------------------------------------------------------------------
  -- Abstract Garbage Collection
 ----------------------------------------------------------------------
@@ -115,12 +108,12 @@ touched (Call f as, ρ) = (touched' f ρ) ⊔
 touched (Exit, _) = Set.empty
 
 -- `adjacency'
-adjacent :: (Ord a, StoreLike a s) => (Var, a) -> s -> Set (Var, a)
+adjacent :: (Ord a, StoreLike a s (D a)) => (Var, a) -> s -> Set (Var, a)
 adjacent (v, addr) σ = Set.fromList [b | Clo (f, ρ) <- Set.toList(fetch σ addr),
                                          b <- Set.toList (touched' (Lam f) ρ)]
 
 -- `reachability'
-reachable :: (Ord a, StoreLike a s) => (PΣ a) -> s -> Set (Var, a)
+reachable :: (Ord a, StoreLike a s (D a)) => (PΣ a) -> s -> Set (Var, a)
 reachable state σ = 
   let collect bs =
         -- fixpoint iteration
@@ -133,64 +126,19 @@ reachable state σ =
    -- reflexive-transitive closure
    in collect (touched state)
 
-
-----------------------------------------------------------------------
- -- Abstract Counting
-----------------------------------------------------------------------
-
--- Abstract natural number
-data AbsNat = AZero | AOne | AMany
-     deriving (Ord, Eq, Show)
-
-instance Lattice AbsNat where
- bot = AZero
- top = AMany
- n ⊑ m = (n == bot) || (m == top) || (n == m)
- n ⊔ m = if (n ⊑ m) then m else n
- n ⊓ m = if (n ⊑ m) then n else m
-
--- Abstract addition
-(⊕) :: AbsNat -> AbsNat -> AbsNat
-AZero ⊕ n = n
-n ⊕ AZero = n
-n ⊕ m = AMany
-
-class StoreLike a s => ACounter a s where
-  count :: s -> a -> AbsNat
-
--- Counting store
-type StoreWithCount a = a :-> ((D a), AbsNat)
-
-instance (Ord a) => ACounter a (StoreWithCount a) where
- -- fetching with default bottom
- count σ a = snd $ σ CFA.Lattice.!! a         
-
--- counter is nullified when filtered
--- and incremented when `bind' is called
-instance (Ord a) => StoreLike a (StoreWithCount a) where
- σ0 = Map.empty  
- bind σ a d = σ `update_add` [a ==> (d, AOne)]
- fetch σ a = fst $ σ CFA.Lattice.!! a  
- replace σ a d = σ ⨆ [a ==> (d, AZero)]
- filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
-
-update_add :: (Ord k, Lattice v) => (k :-> (v, AbsNat)) -> [(k, (v, AbsNat))] -> (k :-> (v, AbsNat))
-update_add f [] = f
-update_add f ((k,v):tl) = Map.insertWith (\(x1, y1) -> \(x2, y2) -> (x1 ⊔ x2, y1 ⊕ y2)) k v (update_add f tl)
-
 ----------------------------------------------------------------------
  -- Anodization
 ----------------------------------------------------------------------
 
-class StoreLike a s => AlkaliLike a s where
+class StoreLike a s d => AlkaliLike a s d where
   addUniqueAddr  :: a -> s
   deAnodizeStore :: s -> s 
   deAnodizeEnv   :: s -> Env a -> Env a
-  deAnodizeD     :: s -> D a -> D a
+  deAnodizeD     :: s -> d -> d
   reset          :: s -> s
 
 -- a usefule instance
-instance (Ord a, StoreLike a s) => StoreLike a (s, ℙ a) where 
+instance (Ord a, StoreLike a s d) => StoreLike a (s, ℙ a) d where 
  σ0 = (σ0, Set.empty)
  bind σ a d = (bind (fst σ) a d, snd σ)
  fetch σ a = fetch (fst σ) a 
