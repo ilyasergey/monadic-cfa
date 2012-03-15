@@ -35,6 +35,7 @@ instance Analysis Concrete
                         case t of 
                           TLab l ctr -> (let (Cont κ) = σ ! a
                                          in case κ of 
+                                            Mt   -> ((), (TMt (l:ctr), ctx, σ))
                                             Ar _ -> ((), (TLab l ctr, ctx, σ))
                                             Fn _ -> ((), (TMt (l:ctr), ctx, σ)))
                           _          -> ((), (t, s, σ)))
@@ -61,7 +62,8 @@ instance Analysis Concrete
   stepAnalysis _ config state = ((), [cf (mstep state) config])
 
   inject call = let initState = (call, Map.empty, Call "mt" [])
-                 in (initState, (), (TMt [], initState, Map.empty))
+                    a0 = Call "mt" []
+                 in (initState, (), (TMt [], initState, Map.empty // [(a0, Cont Mt)]))
   
 
 -- Concrete allocator function

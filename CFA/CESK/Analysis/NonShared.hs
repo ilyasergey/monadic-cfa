@@ -34,11 +34,13 @@ instance (StoreLike Addr s (D Addr), Truncatable Time)
                where
   tick ctx@(Ref (_, _), ρ, a) = GCFA (\(t, s, σ) -> [((), (t, ctx, σ))])
   tick ctx@(App (_, _, l), ρ, a) = GCFA (\(t, s, σ) -> [((), (TLab l (contour t), ctx, σ))])
-  tick ctx@(v, ρ, a) = GCFA (\(TLab l ctr, s, σ) -> 
-                       [case κ of 
-                           Ar _ -> ((), (TLab l ctr, ctx, σ))
-                           Fn _ -> ((), (trunc $ TMt (l : ctr), ctx, σ)) 
-                        | Cont κ <- Set.toList $ fetch σ a])
+  tick ctx@(v, ρ, a) = GCFA (\(t, s, σ) -> case t of 
+                       TLab l ctr -> [case κ of 
+                                      Mt   -> ((), (trunc $ TMt (l : ctr), ctx, σ))
+                                      Ar _ -> ((), (TLab l ctr, ctx, σ))
+                                      Fn _ -> ((), (trunc $ TMt (l : ctr), ctx, σ)) 
+                                      | Cont κ <- Set.toList $ fetch σ a]
+                       _          -> [((), (t, ctx, σ))])
 
   getVar ρ x   = GCFA (\(t, s, σ) -> 
                   let clos = fetch σ (ρ ! x)
