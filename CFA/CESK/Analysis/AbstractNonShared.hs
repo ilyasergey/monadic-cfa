@@ -8,7 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module CFA.CESK.Analysis.Abstract where
+module CFA.CESK.Analysis.AbstractNonShared where
 
 import Data.Map as Map
 import Data.Set as Set
