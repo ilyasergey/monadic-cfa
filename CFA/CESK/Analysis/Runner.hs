@@ -46,7 +46,7 @@ loop worklist v@(shared, oldStates) step =
 
  -- compute an approximation
 explore :: (Analysis m a s g, Ord a, Ord g, Show a, Show g, Lattice s) => 
-        [Stmt] -> (s, Set (State a, g))
+        Exp -> (s, Set (State a, g))
 
 explore program = 
   let (state0, σ0, g0) = inject program

@@ -8,7 +8,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TupleSections #-}
 
-module CFA.AFJ.Analysis.AbstractNonShared where
+module CFA.AFJ.Analysis.NonShared where
 
 import Data.Map as Map
 import Data.Set as Set

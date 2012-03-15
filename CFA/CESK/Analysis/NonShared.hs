@@ -8,7 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module CFA.CESK.Analysis.AbstractNonShared where
+module CFA.CESK.Analysis.NonShared where
 
 import Data.Map as Map
 import Data.Set as Set
@@ -64,7 +64,8 @@ instance (StoreLike Addr s (D Addr), Truncatable Time)
 
   stepAnalysis _ config state = ((), gf (mstep state) config)
 
-  inject call = ((call, Map.empty, undefined), (), (TMt [], undefined, σ0))
+  inject call = let initState = (call, Map.empty, Call "mt" [])
+                 in (initState, (), (TMt [], initState, σ0))
 
 
 
@@ -78,13 +79,14 @@ allocKCFA t (Lam _, _, a) σ =
             Fn ((x, _), _, _) -> Bind x (contour t) 
        | Cont κ <- Set.toList $ fetch σ  a]
 
-
-instance Truncatable Time where
-  trunc (TMt (lab:ls))= TMt ls
-  trunc t = t
-
 instance GarbageCollector (GenericAnalysis () (Time, State Addr, s)) (State Addr)
 
 type Store a = a :-> (D a)
 
+instance StoreLike Addr (Store Addr) (D Addr) where
+ σ0 = Map.empty  
+ bind σ a d = σ ⨆ [a ==> d]
+ fetch σ a = σ CFA.Lattice.!! a  
+ replace σ a d = σ ⨆ [a ==> d]
+ filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
 

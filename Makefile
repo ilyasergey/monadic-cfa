@@ -1,5 +1,6 @@
 GHC=ghc -XTypeSynonymInstances -XParallelListComp -XTypeOperators -XMultiParamTypeClasses -XFlexibleInstances
 
+
 cps: CPSConcrete CPSAbstractNonShared CPSAbstractNonSharedCount CPSAbstractShared CPSAbstractSharedCount
 
 CPSConcrete: CFA/CPS/Examples/Concrete.hs
@@ -16,6 +17,16 @@ CPSAbstractShared: CFA/CPS/Examples/AbstractShared.hs
 
 CPSAbstractSharedCount: CFA/CPS/Examples/AbstractSharedCount.hs
 	$(GHC) --make CFA/CPS/Examples/AbstractSharedCount.hs
+
+
+
+cesk: CESKConcrete CESKAbstractNonShared
+
+CESKConcrete: CFA/CESK/Examples/Concrete.hs
+	$(GHC) --make CFA/CESK/Examples/Concrete.hs
+
+CESKAbstractNonShared: CFA/CESK/Examples/AbstractNonShared.hs
+	$(GHC) --make CFA/CESK/Examples/AbstractNonShared.hs
 
 
 clean:

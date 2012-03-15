@@ -60,7 +60,8 @@ instance Analysis Concrete
 
   stepAnalysis _ config state = ((), [cf (mstep state) config])
 
-  inject call = ((call, Map.empty, undefined), (), (TMt [], undefined, Map.empty))
+  inject call = let initState = (call, Map.empty, Call "mt" [])
+                 in (initState, (), (TMt [], initState, Map.empty))
   
 
 -- Concrete allocator function
