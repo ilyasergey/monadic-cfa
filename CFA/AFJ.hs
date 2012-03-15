@@ -41,7 +41,7 @@ data Stmt = Asgn Var Var Lab
           | New Var ClassName [Var] Lab
           | Cast Var ClassName Var Lab
           | Ret Var Lab
-          deriving (Eq,Ord)
+          deriving (Eq, Ord, Show)
 
 data ClassTable = CTable [Class]
 

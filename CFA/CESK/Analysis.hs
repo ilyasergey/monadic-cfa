@@ -28,7 +28,6 @@ class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where
   storeCont :: a -> Kont a -> m s g ()
   alloc     :: () -> m s g a
 
-
 -- A small-step monadic semantics for CESK* machine
 -- in Store- and Time- passing style
 
@@ -61,10 +60,3 @@ mstep ctx@(Lam (v, l), ρ, a) = do
       b <- alloc ()
       ρ'' <- putVar ρ' x b (Clo (v, ρ, l))
       return (e, ρ'', c)
-
-----------------------------------------------------------------------
- -- Utility
-----------------------------------------------------------------------
-
-class Truncatable t where
-  trunc :: t -> t

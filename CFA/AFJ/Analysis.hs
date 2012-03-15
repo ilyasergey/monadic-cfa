@@ -30,7 +30,23 @@ type Obj a = (ClassName, BEnv a)
 
 class (Eq a, Ord a) => Address a
 
+data Storable a = Val (Obj a)
+       | Cont (Kont a)
+  deriving (Eq, Ord, Show)
+
+---------------------------------------------------------------------  
+-- k-CFA addresses
 ----------------------------------------------------------------------  
+
+data Addr = AVar Var [Lab]
+          | ACall MethodName [Lab]
+  deriving (Eq, Ord, Show)
+
+type Time = [Lab]
+
+instance Address Addr
+
+---------------------------------------------------------------------  
 -- Abstract analysis interface.
 ----------------------------------------------------------------------  
 
@@ -42,10 +58,9 @@ class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where
   getCont        :: a -> m s g (Kont a)
   putCont        :: MethodName -> (Kont a) -> m s g a
   getConstr      :: (?table :: ClassTable) => ClassName -> m s g ([Obj a] -> m s g (BEnv a))
-  getMethod           :: (?table :: ClassTable) => Obj a -> MethodName -> m s g Method
+  getMethod      :: (?table :: ClassTable) => Obj a -> MethodName -> m s g Method
   initBEnv       :: BEnv a -> [Var] -> [Var] -> m s g (BEnv a)
 
- 
 mstep :: (Analysis m a s g, ?table :: ClassTable) => State a -> m s g (State a)
 mstep ctx@((Asgn v v' l):succ, β, pk) = do
       tick ctx
