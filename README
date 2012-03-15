@@ -1,0 +1,32 @@
+Project structure:
+------------------
+
+CFA         - General modules, shred between different CFA instances and languages
+ |- AFJ     - A family of analyses based on CESK Abstract Machine 
+ |            for A-Normal Featherweight Java
+ |- CESK    - A family of analyses based on CESK Abstract Machine
+ |            for direct-style Lambda-calculus
+ |- CPS     - A family of analyses based on CPS Scheme
+
+How to build:
+-------------
+
+Build everything:
+
+make all    
+
+Build CPS-based analyses: 
+
+make cps
+
+Build CESK-based analyses: 
+
+make cesk
+
+Build ANF FJ-based analyses: 
+
+make afj
+
+Clean:
+
+make clean

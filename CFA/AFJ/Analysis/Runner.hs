@@ -46,8 +46,8 @@ loop worklist v@(shared, oldStates) table step =
 
  -- compute an approximation
 explore :: (Analysis m a s g, Ord a, Ord g, Show a, Show g, Lattice s) => 
-        [Stmt] -> ClassTable -> (s, Set (State a, g))
+        [Var] -> [Stmt] -> ClassTable -> (s, Set (State a, g))
 
-explore program table = 
-  let (state0, σ0, g0) = inject program
+explore vars program table = 
+  let (state0, σ0, g0) = inject vars program
    in loop [(state0, g0)] (σ0, Set.empty) table 0 

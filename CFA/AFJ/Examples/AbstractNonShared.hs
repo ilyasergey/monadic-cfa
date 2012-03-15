@@ -21,6 +21,57 @@ import CFA.AFJ.Analysis.NonShared
 -- example program
 ----------------------------------------------------------------------
 
+{-
+
+class B {}
+
+class A {
+  private final B myB; 
+  
+  public A(B givenB) {
+    this.myB = givenB;
+  }
+  
+  B foo() {
+    B tmpB;
+    tmpB = this.myB;
+    return B;
+  }
+}
+
+// Main method of the AFJ program
+
+void main () {
+  A mainA;
+  B mainB;
+  B mainB1;
+  mainB = new B();
+  mainA = new A(mainB);
+  mainB1 = mainA.foo();  
+}
+
+-}
+
+bClass :: Class
+bClass = ("B", Nothing, [], ("B", [], [], []), [])
+
+aClass :: Class
+aClass = ("A", Nothing, 
+               [("B", "myB")], ("A", [("B", "givenB")], [], [("myB", "givenB")]), 
+               [
+                 ("B", "foo", [], [("B", "tmpB")], 
+                                  [Lkp "tmpB" "this" "myB" "l1", 
+                                   Ret "tmpB" "l2"])])
+
+ctable :: ClassTable
+ctable = CTable [aClass, bClass]
+
+mainVars  = ["mainA", "mainB", "mainB1"]
+mainStmts = [ New "mainB" "B" [] "l3"
+            , New "mainA" "A" ["mainB"] "l4"
+            , MCall "mainB1" "mainA" "foo" [] "l5"
+              ]
+
 ----------------------------------------------------------------------
 
 instance Truncatable Time where
@@ -28,5 +79,5 @@ instance Truncatable Time where
 
 type AbstractGuts = (Time, Store Addr)
 
-abstractResult :: [Stmt] -> ClassTable -> ((), Set (State Addr, AbstractGuts))
+abstractResult :: [Var] -> [Stmt] -> ClassTable -> ((), Set (State Addr, AbstractGuts))
 abstractResult = explore 

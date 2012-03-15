@@ -62,7 +62,7 @@ class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where
   initBEnv       :: BEnv a -> [Var] -> [Var] -> m s g (BEnv a)
 
   stepAnalysis   :: ClassTable -> s -> g -> State a -> (s, [(State a, g)])
-  inject         :: [Stmt] -> (State a, s, g)
+  inject         :: [Var] -> [Stmt] -> (State a, s, g)
 
 mstep :: (Analysis m a s g) => ClassTable -> State a -> m s g (State a)
 mstep table ctx@((Asgn v v' l):succ, β, pk) = do
@@ -108,4 +108,5 @@ mstep table ctx@((MCall v v0 mthd vs l):succ, β, pk) = do
       β'' <- initBEnv β' vs'' vs'''
       sequence [putObj β'' vi di | vi <- vs'' | di <- ds]
       return $! (body, β'', pk')     
-      
+-- final state
+mstep _ c@([], _ , _) = return c

@@ -75,7 +75,11 @@ instance (StoreLike Addr s (D Addr), Truncatable Time)
 
   stepAnalysis table _ config state = ((), gf (mstep table state) config)
 
-  inject stmts = ((stmts, Map.empty, undefined), (), ([], σ0))
+  inject vars stmts = let t0 = [] 
+                          as = L.map (alloc t0) vars
+                          varBinds = L.zip vars as
+                          a0 = ACall "main" []
+                       in ((stmts, Map.empty // varBinds, a0), (), ([], σ0))
 
 
 alloc :: (Truncatable Time) => Time -> Var -> Addr
