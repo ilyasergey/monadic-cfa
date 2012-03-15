@@ -1,34 +1,25 @@
 GHC=ghc -XTypeSynonymInstances -XParallelListComp -XTypeOperators -XMultiParamTypeClasses -XFlexibleInstances
 
-active: CFA MonadCFASP MonadCFASPT MonadCFASPTCh XCFA
+cps: CPSConcrete CPSAbstractNonShared CPSAbstractNonSharedCount CPSAbstractShared CPSAbstractSharedCount
 
-all: MonadCFA MonadKCFA MonadCFASP CFA
+CPSConcrete: CFA/CPS/Examples/Concrete.hs
+	$(GHC) --make CFA/CPS/Examples/Concrete.hs
 
+CPSAbstractNonShared: CFA/CPS/Examples/AbstractNonShared.hs
+	$(GHC) --make CFA/CPS/Examples/AbstractNonShared.hs
 
-XCFA: XCFA.hs
-	$(GHC) --make XCFA
+CPSAbstractNonSharedCount: CFA/CPS/Examples/AbstractNonSharedCount.hs
+	$(GHC) --make CFA/CPS/Examples/AbstractNonSharedCount.hs
 
-MonadCFASPTCh: MonadCFASPTCh.hs
-	$(GHC) --make MonadCFASPTCh
+CPSAbstractShared: CFA/CPS/Examples/AbstractShared.hs
+	$(GHC) --make CFA/CPS/Examples/AbstractShared.hs
 
-MonadCFASPT: MonadCFASPT.hs
-	$(GHC) --make MonadCFASPT
+CPSAbstractSharedCount: CFA/CPS/Examples/AbstractSharedCount.hs
+	$(GHC) --make CFA/CPS/Examples/AbstractSharedCount.hs
 
-MonadCFASP: MonadCFASP.hs
-	$(GHC) --make MonadCFASP
-
-
-
-MonadKCFA: MonadKCFA.hs
-	ghc -XTypeSynonymInstances -XParallelListComp -XTypeOperators --make MonadKCFA.hs
-
-MonadCFA: MonadCFA.hs
-	ghc -XTypeSynonymInstances -XParallelListComp -XTypeOperators --make MonadCFA
-
-
-CFA: CFA.hs
-	ghc -XTypeSynonymInstances -XParallelListComp -XTypeOperators --make CFA
 
 clean:
-	rm -fv *.{o,hi} MonadCFA CFA MonadKCFA MonadCFASP MonadCFASPT MonadCFASPTCh XCFA
+	find . -type f -name "*.o" -exec rm -fv {} \;
+	find . -type f -name "*.hi" -exec rm -fv {} \;
+
 
