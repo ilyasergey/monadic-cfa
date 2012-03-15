@@ -78,11 +78,17 @@ instance (StoreLike Addr s (D Addr), Truncatable Time)
   inject stmts = ((stmts, Map.empty, undefined), (), ([], σ0))
 
 
-alloc :: Time -> Var -> Addr
+alloc :: (Truncatable Time) => Time -> Var -> Addr
 alloc t v = AVar v $ trunc t
 
-alloc_k :: Time -> MethodName -> Addr
+alloc_k :: (Truncatable Time) => Time -> MethodName -> Addr
 alloc_k t m = ACall m $ trunc t
 
-instance Truncatable [Lab] where
-  trunc ls = take 1 ls
+type Store a = a :-> (D a)
+
+instance StoreLike Addr (Store Addr) (D Addr) where
+ σ0 = Map.empty  
+ bind σ a d = σ ⨆ [a ==> d]
+ fetch σ a = σ CFA.Lattice.!! a  
+ replace σ a d = σ ⨆ [a ==> d]
+ filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ

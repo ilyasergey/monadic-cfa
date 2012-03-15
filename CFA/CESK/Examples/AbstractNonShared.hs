@@ -29,7 +29,7 @@ ex   = App (App (comb, idx, "l11"), idy, "l10")
 ----------------------------------------------------------------------
 
 instance Truncatable Time where
-  trunc (TMt (lab:ls)) = TMt ls
+  trunc (TMt ls) = TMt (take 1 ls)
   trunc t = t
 
 
