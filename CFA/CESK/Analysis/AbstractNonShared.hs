@@ -62,6 +62,11 @@ instance (StoreLike Addr s (D Addr), Truncatable Time)
   alloc _       = GCFA (\(t, s, σ) -> do
                   [(a, (t, s, σ)) | a <- allocKCFA t s σ])
 
+  stepAnalysis _ config state = ((), gf (mstep state) config)
+
+  inject call = ((call, Map.empty, undefined), (), (TMt [], undefined, σ0))
+
+
 
 -- abstract allocator function
 -- nondeterministic because of stored continuations

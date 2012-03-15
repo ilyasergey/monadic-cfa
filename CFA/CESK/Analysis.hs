@@ -28,6 +28,10 @@ class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where
   storeCont :: a -> Kont a -> m s g ()
   alloc     :: () -> m s g a
 
+  stepAnalysis :: s -> g -> State a -> (s, [(State a, g)])
+  inject :: Exp -> (State a, s, g)
+
+
 -- A small-step monadic semantics for CESK* machine
 -- in Store- and Time- passing style
 

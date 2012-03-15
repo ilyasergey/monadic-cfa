@@ -8,15 +8,15 @@
 -- TODO: get rid of this
 {-# LANGUAGE UndecidableInstances #-}
 
-module CFA.AFJ.Analysis.Runner where
+module CFA.CESK.Analysis.Runner where
 
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
 
 import CFA.Lattice
-import CFA.AFJ
-import CFA.AFJ.Analysis
+import CFA.CESK
+import CFA.CESK.Analysis
 
 import Debug.Trace
 
@@ -27,13 +27,13 @@ import Debug.Trace
 -- Abstract state-space exploration algorithm
 -- TODO: remove step counting and trace output 
 loop :: (Analysis m a s g, Ord a, Ord g, Show a, Show g, Lattice s) =>
-        [(State a, g)] -> (s, Set (State a, g)) -> ClassTable -> Int -> (s, Set (State a, g))
+        [(State a, g)] -> (s, Set (State a, g)) -> Int -> (s, Set (State a, g))
 
-loop worklist v@(shared, oldStates) table step = 
+loop worklist v@(shared, oldStates) step = 
   -- trace output
   trace ("Worklist [step " ++ show step ++ "]:\n" ++ show worklist ++ "\n") $
   let newStoreStates = List.map (\(state, config) -> 
-                                    stepAnalysis table shared config state)
+                                    stepAnalysis shared config state)
                                     worklist 
       -- compute a new shared component and new states
       (shared', states') = foldl (\(s, bg) -> \(s', bg') -> (s ⊔ s', bg ++ bg'))
@@ -42,12 +42,12 @@ loop worklist v@(shared, oldStates) table step =
    in if List.null newWorkList
       then v
       else let newVisited = (shared', oldStates ⊔ (Set.fromList newWorkList))
-            in loop newWorkList newVisited table (step + 1)
+            in loop newWorkList newVisited (step + 1)
 
  -- compute an approximation
 explore :: (Analysis m a s g, Ord a, Ord g, Show a, Show g, Lattice s) => 
-        [Stmt] -> ClassTable -> (s, Set (State a, g))
+        [Stmt] -> (s, Set (State a, g))
 
-explore program table = 
+explore program = 
   let (state0, σ0, g0) = inject program
-   in loop [(state0, g0)] (σ0, Set.empty) table 0 
+   in loop [(state0, g0)] (σ0, Set.empty) 0 

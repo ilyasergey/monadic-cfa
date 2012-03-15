@@ -58,6 +58,9 @@ instance Analysis Concrete
   alloc _     = Concrete (\(t, s, σ) -> do
                   (allocC t s σ, (t, s, σ)))
 
+  stepAnalysis _ config state = ((), [cf (mstep state) config])
+
+  inject call = ((call, Map.empty, undefined), (), (TMt [], undefined, Map.empty))
   
 
 -- Concrete allocator function
