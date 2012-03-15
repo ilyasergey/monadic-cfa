@@ -55,14 +55,14 @@ instance (StoreLike Addr s (D Addr), Truncatable Time)
                                β' = β // pairs' // pairs'' in
                            [(β', (t, σ))])
 
-  getConstr cn  = GCFA (\(t, σ) ->  
+  getConstr table cn  = GCFA (\(t, σ) ->  
              -- updates a store and returns an environment of all class fields
              let ructor = (\ds -> GCFA(\(t', σ') -> 
-                   let fs = allFields ?table cn -- compute all fields
+                   let fs = allFields table cn -- compute all fields
                        as = L.map (alloc t) fs    -- appropriate addresses for fields
                        fBindings = zip fs as    -- bindings [field |-> addr]
                        -- mapping from all class fields to provided arguments
-                       fMappings = Map.empty // classFieldMappings ?table cn ds 
+                       fMappings = Map.empty // classFieldMappings table cn ds 
                        -- heap is updated according to the mappings
                        pairs = [(ai, Set.singleton (Val $ fMappings ! fi)) | (fi, ai) <- fBindings] 
                        σ'' = foldl (\store (ai, di) -> bind store ai di) σ' pairs
@@ -71,7 +71,12 @@ instance (StoreLike Addr s (D Addr), Truncatable Time)
                     in [(β', (t', σ''))]))
              in [(ructor, (t, σ))])
 
-  getMethod (cn, _) m = GCFA (\(t, σ) -> [(method ?table cn m, (t, σ))])
+  getMethod table (cn, _) m = GCFA (\(t, σ) -> [(method table cn m, (t, σ))])
+
+  stepAnalysis table _ config state = ((), gf (mstep table state) config)
+
+  inject stmts = ((stmts, Map.empty, undefined), (), ([], σ0))
+
 
 alloc :: Time -> Var -> Addr
 alloc t v = AVar v $ trunc t
