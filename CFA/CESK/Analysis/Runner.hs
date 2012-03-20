@@ -5,9 +5,6 @@
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
--- TODO: get rid of this
-{-# LANGUAGE UndecidableInstances #-}
-
 module CFA.CESK.Analysis.Runner where
 
 import Data.Map as Map

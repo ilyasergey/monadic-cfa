@@ -131,7 +131,7 @@ class StoreLike a s d => AlkaliLike a s d where
   deAnodizeD     :: s -> d -> d
   reset          :: s -> s
 
--- a usefule instance
+-- a useful instance
 instance (Ord a, StoreLike a s d) => StoreLike a (s, ℙ a) d where 
  σ0 = (σ0, Set.empty)
  bind σ a d = (bind (fst σ) a d, snd σ)
