@@ -33,16 +33,16 @@ import CFA.Lattice
   
 -- GenericAnalysis :: * -> * -> *
 -- parametrized by guts and passed result
-data GenericAnalysis s g b = GCFA {
-  gf :: g -> [(b, g)]
-}
+-- data GenericAnalysis s g b = GCFA {
+--   gf :: g -> [(b, g)]
+-- }
 
--- Curry GenericAnalysis for the fixed guts
-instance Monad (GenericAnalysis s g) where
-  (>>=) (GCFA f) g = GCFA (\ guts ->
-    concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
+-- -- Curry GenericAnalysis for the fixed guts
+-- instance Monad (GenericAnalysis s g) where
+--   (>>=) (GCFA f) g = GCFA (\ guts ->
+--     concatMap (\ (a, guts') -> (gf $ g(a)) guts') (f guts))
 
-  return a = GCFA (\ guts -> [(a,guts)])
+--   return a = GCFA (\ guts -> [(a,guts)])
 
 newtype SharedStateT s m a = SharedStateT { runSharedStateT :: s -> (s, m a) }
 

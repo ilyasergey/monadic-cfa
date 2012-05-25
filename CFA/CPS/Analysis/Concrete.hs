@@ -15,6 +15,7 @@ import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
 import Control.Monad.State
+import Control.Monad.Identity
 import Control.Applicative
 
 import Util
@@ -33,7 +34,8 @@ type ΣC = (Store CAddr, Int)
 alterStore = mapFst
 increaseTime = mapSnd (+1)
 
-type Concrete = State ΣC
+-- is a monad
+type Concrete = StateT ΣC Identity
 
 readA :: CAddr -> Concrete (D CAddr)
 readA a = gets $ (! a) . fst 
