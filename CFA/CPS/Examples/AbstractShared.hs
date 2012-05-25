@@ -5,9 +5,12 @@ import Data.Set as Set
 import Data.List as List
 
 import CFA.CPS
+import CFA.CFAMonads
 import CFA.Lattice
+import CFA.Store
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.Runner
+import CFA.CPS.Analysis.SingleStore
 
 ----------------------------------------------------------------------
 -- abstract interpreter with a single-threaded store
@@ -38,4 +41,6 @@ instance KCFA KTime where
 type AbstractGutsSS = (ProcCh KAddr, KTime)
 
 abstractResultSSC :: CExp -> (Store KAddr, Set (PΣ KAddr, AbstractGutsSS))
-abstractResultSSC = explore  
+abstractResultSSC e =
+  case runWithStore (runFPA $ explore e) (SAO (Set.empty, σ0)) (Nothing, τ0) of
+    (SAO (o,s), _) -> (s, o)

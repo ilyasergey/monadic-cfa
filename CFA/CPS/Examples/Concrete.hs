@@ -33,5 +33,5 @@ omega = Call ucombx [ucomby]
 
 type ConcreteGuts = (Store CAddr, Int)
 
-concreteResult :: CExp -> ((), Set (PΣ CAddr, ConcreteGuts))
-concreteResult = explore
+concreteResult :: CExp -> Set (PΣ CAddr, ConcreteGuts)
+concreteResult = exploreConcrete

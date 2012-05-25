@@ -31,34 +31,36 @@ import CFA.Store
 -- 2. Guts define the shared component
 -- !! No more dependencies is needed
 
-class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where
-  fun :: (Env a) -> AExp -> m s g (Val a)
-  arg :: (Env a) -> AExp -> m s g (D a)
+class Monad m => Analysis m a | m -> a where
+  fun :: Env a -> AExp -> m (Val a)
+  arg :: Env a -> AExp -> m (D a)
 
-  ($=) :: a -> (D a) -> m s g ()
+  ($=) :: a -> D a -> m ()
 
-  updateEnv :: Env a -> [(Var, a)] ->  m s g (Env a)
+  updateEnv :: Env a -> [(Var, a)] ->  m (Env a)
   -- default implementation
   updateEnv ρ bs = return $ ρ // bs
  
-  alloc :: Var -> m s g a
-  tick :: (PΣ a) -> m s g ()
+  alloc :: Var -> m a
+  tick :: PΣ a -> m ()
 
-  stepAnalysis :: s -> g -> PΣ a -> (s, [(PΣ a, g)])
-  inject :: CExp -> (PΣ a, s, g)
+  -- stepAnalysis :: s -> g -> PΣ a -> (s, [(PΣ a, g)])
+  -- inject :: CExp -> (PΣ a, s, g)
 
 ----------------------------------------------------------------------  
 -- Generic transition
 ----------------------------------------------------------------------  
-mnext :: Analysis m a s g => (PΣ a) -> m s g (PΣ a)
+mnext :: (Analysis m a, GarbageCollector m (PΣ a)) => PΣ a -> m (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
-  proc@(Clo (vs :=> call', ρ')) <- fun ρ f
+  Clo (vs :=> call', ρ') <- fun ρ f
   tick ps
   as  <- mapM alloc vs
   ds  <- mapM (arg ρ) aes 
   ρ'' <- updateEnv ρ' [ v ==> a | v <- vs | a <- as ]
   sequence [ a $= d | a <- as | d <- ds ]
-  return $! (call', ρ'')
+  let sn = (call', ρ'')
+  gc sn
+  return $! sn
 mnext ps@(Exit, ρ) = return $! ps
 
 ----------------------------------------------------------------------

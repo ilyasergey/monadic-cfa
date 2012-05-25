@@ -47,9 +47,9 @@ instance (Addressable a t, StoreLike a s (D a))
   tick ps = GCFA (\ (Just proc, σ, t) ->
      [((), (Just proc, σ, advance proc ps t))])
 
-  stepAnalysis _ config state = ((), gf (mnext state) config)
+  -- stepAnalysis _ config state = ((), gf (mnext state) config)
 
-  inject call = ((call, Map.empty), (), (Nothing, σ0, τ0))
+  -- inject call = ((call, Map.empty), (), (Nothing, σ0, τ0))
 
 -- Garbage Collection
 instance GarbageCollector (GenericAnalysis () (ProcCh a, s, t)) (PΣ a)

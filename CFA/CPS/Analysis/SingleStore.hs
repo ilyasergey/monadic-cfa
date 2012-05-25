@@ -21,11 +21,11 @@ import CFA.CFAMonads
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.SingleStore.SingleStoreGC
 
-instance (Addressable a t, StoreLike a s (D a), GarbageCollector ((SingleStoreAnalysis a) s g) (PΣ a)) 
-   => Analysis (SingleStoreAnalysis a) 
+instance (Addressable a t, StoreLike a s (D a), GarbageCollector (SingleStoreAnalysis s (ProcCh a, t)) (PΣ a)) 
+   => Analysis (SingleStoreAnalysis s (ProcCh a, t)) 
                a                     -- address type
-               s                     -- shared store
-               (ProcCh a, t)         -- SingleStore Analysis' guts
+               -- s                     -- shared store
+               -- (ProcCh a, t)         -- SingleStore Analysis' guts
                where
   fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
     let proc = Clo(l, ρ) 
@@ -37,7 +37,7 @@ instance (Addressable a t, StoreLike a s (D a), GarbageCollector ((SingleStoreAn
   arg ρ (Lam l) = SSFA (\σ -> \(ch, t) -> 
     let proc = Clo(l, ρ) 
      in (σ, [ (Set.singleton proc, (ch, t)) ]))
-  arg ρ (Ref v) = SSFA (\σ -> \(ch, t) -> 
+  arg ρ (Ref v) = SSFA (\σ (ch, t) -> 
     let procs = fetch σ (ρ!v)
      in (σ, [ (procs, (ch,t)) ]))
 
@@ -50,6 +50,6 @@ instance (Addressable a t, StoreLike a s (D a), GarbageCollector ((SingleStoreAn
   tick ps = SSFA (\σ -> \ (Just proc, t) ->
      (σ, ([((), (Just proc, advance proc ps t))])))
 
-  stepAnalysis store config state = runWithStore (mnext state >>= gc) store config
+  -- stepAnalysis store config state = runWithStore (mnext state >>= gc) store config
 
-  inject call = ((call, Map.empty), σ0, (Nothing, τ0))
+  -- inject call = ((call, Map.empty), σ0, (Nothing, τ0))

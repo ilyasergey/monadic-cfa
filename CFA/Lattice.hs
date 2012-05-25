@@ -4,12 +4,14 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module CFA.Lattice where
 
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
+import Data.Monoid
 
  -- Abbreviations.
 type k :-> v = Map.Map k v
@@ -70,3 +72,19 @@ f ⨆ ((k,v):tl) = Map.insertWith (⊔) k v (f ⨆ tl)
 
 (!!) :: (Ord k, Lattice v) => (k :-> v) -> k -> v
 f !! k = Map.findWithDefault bot k f
+
+-- a lattice is a monoid in two ways...
+newtype JoinMonoid a = JoinMonoid { withJoinMonoid :: a } deriving (Show, Eq, Lattice)
+
+instance Lattice a => Monoid (JoinMonoid a) where
+  mempty = bot
+  mappend = (⊔)
+
+newtype MeetMonoid a = MeetMonoid { withMeetMonoid :: a } deriving (Show, Eq, Lattice)
+
+instance Lattice a => Monoid (MeetMonoid a) where
+  mempty = top
+  mappend = (⊓)
+
+join :: Lattice a => [a] -> a
+join l = withJoinMonoid $ mconcat $ List.map JoinMonoid l

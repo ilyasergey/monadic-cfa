@@ -26,9 +26,9 @@ class (Eq a, Lattice s, Lattice d) => StoreLike a s d | s->a, s->d where
 
 -- Abstract garbage collector
 class Monad m => GarbageCollector m a where
-  gc :: a -> m a
+  gc :: a -> m ()
   -- default implementation
-  gc = return
+  gc _ = return ()
 
 ----------------------------------------------------------------------
  -- Abstract Counting
