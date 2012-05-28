@@ -32,39 +32,42 @@ first  (a, b, c) = a
 second (a, b, c) = b
 third  (a, b, c) = c
 
-alterFirst  a' = modify $ \(a, b, c) -> (a', b, c)
-alterSecond b' = modify $ \(a, b, c) -> (a, b', c)
-alterThird  c' = modify $ \(a, b, c) -> (a, b, c')
+alterFirst  f = modify $ \(a, b, c) -> (f a, b, c)
+alterSecond f = modify $ \(a, b, c) -> (a, f b, c)
+alterThird  f = modify $ \(a, b, c) -> (a, b, f c)
+
+setSecond :: MonadState (s1,s2,s3) m => s2 -> m ()
+setSecond = alterSecond . const
 
 -- instance (Addressable a t, StoreLike a s (D a), 
 --           MonadState (s, ProcCh a, t) m, MonadPlus m) 
 --   => Analysis m a
 
+getsND :: (MonadPlus m, MonadState s m) => (s -> [a]) -> m a
+getsND f = do results <- gets f
+              msum $ List.map return results
+
 instance (Addressable a t, StoreLike a s (D a)) 
   => Analysis (GenericAnalysis (s, ProcCh a, t)) a
               where
-     fun ρ (Lam l) = let proc = Clo(l, ρ)
-                      in do alterSecond $ Just proc
-                            return $ proc
+     fun ρ (Lam l) = do let proc = Clo(l, ρ)
+                        setSecond $ Just proc
+                        return proc
 
      fun ρ (Ref v) = do σ <- gets first 
-                        procs <- gets $ Set.toList . (flip fetch $ ρ!v) . first
-                        proc <- msum $ List.map return procs
-                        alterSecond $ Just proc
+                        proc <- getsND $ Set.toList . (flip fetch $ ρ!v) . first
+                        setSecond $ Just proc
                         return proc
         
      arg ρ (Lam l) = return $ Set.singleton $ Clo(l, ρ)   
-     arg ρ (Ref v) = gets $ (flip fetch (ρ!v)) . first
+     arg ρ (Ref v) = gets $ flip fetch (ρ!v) . first
      
-     a $= d = do σ <- gets first
-                 alterFirst $ bind σ a d
+     a $= d = alterFirst $ \ σ -> bind σ a d
 
-     alloc v = do t <- gets third 
-                  return (valloc v t)   
+     alloc v = gets (valloc v . third)
      
      tick ps = do Just proc <- gets second
-                  t <- gets third
-                  alterThird $ advance proc ps t
+                  alterThird $ advance proc ps
 
   -- stepAnalysis _ config state = ((), gf (mnext state) config)
 
