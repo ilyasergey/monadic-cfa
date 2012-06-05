@@ -98,7 +98,7 @@ askSSLT = SSListT $ \s -> do env <- ask
                              return (s, [env])
 localSSLT :: (Lattice s, MonadReader env m) => (env -> env) -> SharedStateListT s m v -> SharedStateListT s m v
 localSSLT f m = SSListT $ \s -> local f (runSSListT m s)
-i
+
 instance (Lattice s, Monad n) => MonadPlus (SharedStateListT s n) where
   mzero = SSListT $ \s -> return (s, [])
   mplus a b = SSListT $ \s -> do (sa, resa) <- runSSListT a s
