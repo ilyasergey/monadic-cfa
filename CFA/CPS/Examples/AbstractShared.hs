@@ -3,6 +3,8 @@ module CFA.CPS.Examples where
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
+import Control.Monad.State
+import Control.Monad.Reader
 
 import CFA.CPS
 import CFA.CFAMonads
@@ -39,8 +41,10 @@ instance KCFA KTime where
   getK = const 1
 
 type AbstractGutsSS = (ProcCh KAddr, KTime)
+initialGutsSS :: AbstractGutsSS 
+initialGutsSS = (Nothing, τ0) 
 
-abstractResultSSC :: CExp -> (Store KAddr, Set (PΣ KAddr, AbstractGutsSS))
-abstractResultSSC e =
-  case runWithStore (runFPA $ explore e) (SAO (Set.empty, σ0)) (Nothing, τ0) of
-    (SAO (o,s), _) -> (s, o)
+abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)
+abstractResultSSC e = snd go 
+  where go :: ((Store KAddr, [()]), (Set (PΣ KAddr, AbstractGutsSS), Store KAddr))
+        go = runState (runSSListT0 $ runReaderT (explore e) initialGutsSS) bot

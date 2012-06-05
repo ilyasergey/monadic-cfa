@@ -13,43 +13,61 @@ module CFA.CPS.Analysis.SingleStore where
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
+import Control.Monad.State
+import Control.Monad.Reader
+import Control.Monad.Identity
 
 import CFA.CPS
 import CFA.Lattice
 import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
-import CFA.CPS.Analysis.SingleStore.SingleStoreGC
+import CFA.CPS.Analysis.Runner
+--import CFA.CPS.Analysis.SingleStore.SingleStoreGC
 
-instance (Addressable a t, StoreLike a s (D a), GarbageCollector (SingleStoreAnalysis s (ProcCh a, t)) (PΣ a)) 
-   => Analysis (SingleStoreAnalysis s (ProcCh a, t)) 
-               a                     -- address type
-               -- s                     -- shared store
-               -- (ProcCh a, t)         -- SingleStore Analysis' guts
-               where
-  fun ρ (Lam l) = SSFA (\σ -> \(_,t) ->
-    let proc = Clo(l, ρ) 
-     in (σ, [(proc, (Just proc,t)) ]))
-  fun ρ (Ref v) = SSFA (\σ -> \(_,t) -> 
-    let procs = fetch σ (ρ!v)
-     in (σ, [ (proc, (Just proc,t)) | proc <- Set.toList procs ])) 
+import Util
 
-  arg ρ (Lam l) = SSFA (\σ -> \(ch, t) -> 
-    let proc = Clo(l, ρ) 
-     in (σ, [ (Set.singleton proc, (ch, t)) ]))
-  arg ρ (Ref v) = SSFA (\σ (ch, t) -> 
-    let procs = fetch σ (ρ!v)
-     in (σ, [ (procs, (ch,t)) ]))
+type SharedAnalysis s0 s g = ReaderT g (SharedStateListT (s, s0) Identity)
+-- type SharedAnalysis s0 s g = ReaderT g (SharedStateListT (s0, s) Identity))
+-- type SharedAnalysis s0 s g = ReaderT g (SharedStateListT s (StateT s0 Identity))
+-- type SharedAnalysis s0 s g = g -> s -> s0 -> (s0, s, [(a]))
 
-  a $= d = SSFA (\σ -> \(ch, t) -> 
-    let σ' = bind σ a d
-    in (σ', [((), (ch, t))] ))
+-- SharedAnalysis s0 s g a =
+--                        SharedStateListT s (State (g, s0)) a
+--                        s -> (g, s0) -> ((s, [a]), (g, s0))
 
-  alloc v = SSFA (\σ -> \(ch, t) -> (σ, [(valloc v t, (ch, t))]))
+instance (Addressable a t, StoreLike a s (D a), Lattice s, Lattice s0) =>
+         Analysis (SharedAnalysis s0 s (ProcCh a, t)) a where
+     fun ρ (Lam l) = return $ Clo(l, ρ)
+     fun ρ (Ref v) = getsNDSet $ flip fetch (ρ!v) . fst
+        
+     arg ρ (Lam l) = return $ Clo(l, ρ)   
+     arg ρ (Ref v) = getsNDSet $ flip fetch (ρ!v) . fst
+     
+     a $= d = modify $ mapFst $ \ σ -> bind σ a (Set.singleton d)
 
-  tick ps = SSFA (\σ -> \ (Just proc, t) ->
-     (σ, ([((), (Just proc, advance proc ps t))])))
+     alloc v = asks (valloc v . snd)
+     
+     tick proc ps = local $ \(_, t) -> (Just proc, advance proc ps t)
 
-  -- stepAnalysis store config state = runWithStore (mnext state >>= gc) store config
 
-  -- inject call = ((call, Map.empty), σ0, (Nothing, τ0))
+instance (Ord a, StoreLike a s (D a), Lattice s0) 
+  => GarbageCollector (SharedAnalysis s0 s g) (PΣ a) where
+  gc ps = do
+    σ <- gets fst
+    let rs = Set.map (\(v, a) -> a) (reachable ps σ)
+    modify $ mapFst $ \ σ -> filterStore σ (\a -> not (Set.member a rs))
+    
+instance (Ord g, Ord a, Lattice s) =>
+         FPCalc (SharedAnalysis (Set (PΣ a, g), s) s g) (PΣ a) where
+  hasSeen p = do
+    s <- gets fst
+    (s0, sOld) <- gets snd
+    g <- ask
+    return $ Set.member (p,g) s0 && s ⊑ sOld
+  markSeen p = do
+    g <- ask
+    s <- gets fst
+    lift $ modify $ mapSnd $
+      \(seenStates, prevStore) -> (Set.insert (p, g) seenStates, s ⊔ prevStore)
+

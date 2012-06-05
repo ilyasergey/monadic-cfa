@@ -32,17 +32,18 @@ import CFA.Store
 -- !! No more dependencies is needed
 
 class Monad m => Analysis m a | m -> a where
+  
   fun :: Env a -> AExp -> m (Val a)
-  arg :: Env a -> AExp -> m (D a)
+  arg :: Env a -> AExp -> m (Val a)
 
-  ($=) :: a -> D a -> m ()
+  ($=) :: a -> Val a -> m ()
 
   updateEnv :: Env a -> [(Var, a)] ->  m (Env a)
   -- default implementation
   updateEnv ρ bs = return $ ρ // bs
  
   alloc :: Var -> m a
-  tick :: PΣ a -> m ()
+  tick :: Val a -> PΣ a -> m v -> m v
 
   -- stepAnalysis :: s -> g -> PΣ a -> (s, [(PΣ a, g)])
   -- inject :: CExp -> (PΣ a, s, g)
@@ -50,18 +51,18 @@ class Monad m => Analysis m a | m -> a where
 ----------------------------------------------------------------------  
 -- Generic transition
 ----------------------------------------------------------------------  
-mnext :: (Analysis m a, GarbageCollector m (PΣ a)) => PΣ a -> m (PΣ a)
+mnext :: (Analysis m a, GarbageCollector m (PΣ a)) => PΣ a -> m (Maybe (PΣ a))
 mnext ps@(Call f aes, ρ) = do  
-  Clo (vs :=> call', ρ') <- fun ρ f
-  tick ps
+  proc@(Clo (vs :=> call', ρ')) <- fun ρ f
+  tick proc ps $ do
   as  <- mapM alloc vs
   ds  <- mapM (arg ρ) aes 
   ρ'' <- updateEnv ρ' [ v ==> a | v <- vs | a <- as ]
   sequence [ a $= d | a <- as | d <- ds ]
   let sn = (call', ρ'')
   gc sn
-  return $! sn
-mnext ps@(Exit, ρ) = return $! ps
+  return $! Just sn
+mnext ps@(Exit, ρ) = return Nothing
 
 ----------------------------------------------------------------------
  -- Addresses, Stores and Choices

@@ -19,59 +19,52 @@ import Data.Traversable
 import Control.Monad.State
 import Control.Monad.List
 import Control.Monad.Identity
+import Control.Monad.Reader
 
 import CFA.CPS
 import CFA.Lattice
 import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
+import CFA.CPS.Analysis.Runner
 
-type GenericAnalysis g = StateT g (ListT Identity)
+import Util
 
-first  (a, b, c) = a
-second (a, b, c) = b
-third  (a, b, c) = c
+type GenericAnalysis s0 s g = ReaderT g (SharedStateListT s (SharedStateListT s0 Identity)) 
+-- GenericAnalysis s0 s g a =
+--   SharedStateListT s (StateT g (SharedStateListT s0 Identity)) 
+--   s -> StateT g (SharedStateListT s0 Identity) (s, [a])
+--   s -> g -> s0 -> (s0, [(g, (s, [a]))])
 
-alterFirst  f = modify $ \(a, b, c) -> (f a, b, c)
-alterSecond f = modify $ \(a, b, c) -> (a, f b, c)
-alterThird  f = modify $ \(a, b, c) -> (a, b, f c)
-
-setSecond :: MonadState (s1,s2,s3) m => s2 -> m ()
-setSecond = alterSecond . const
-
--- instance (Addressable a t, StoreLike a s (D a), 
---           MonadState (s, ProcCh a, t) m, MonadPlus m) 
---   => Analysis m a
-
-getsND :: (MonadPlus m, MonadState s m) => (s -> [a]) -> m a
-getsND f = do results <- gets f
-              msum $ List.map return results
-
-instance (Addressable a t, StoreLike a s (D a)) 
-  => Analysis (GenericAnalysis (s, ProcCh a, t)) a
+instance (Addressable a t, StoreLike a s (D a), Lattice s0) 
+  => Analysis (GenericAnalysis s0 s (ProcCh a, t)) a
               where
-     fun ρ (Lam l) = do let proc = Clo(l, ρ)
-                        setSecond $ Just proc
-                        return proc
-
-     fun ρ (Ref v) = do σ <- gets first 
-                        proc <- getsND $ Set.toList . (flip fetch $ ρ!v) . first
-                        setSecond $ Just proc
-                        return proc
+     fun ρ (Lam l) = return $ Clo(l, ρ)
+     fun ρ (Ref v) = getsM $ pureNDSet . (flip fetch $ ρ!v) 
         
-     arg ρ (Lam l) = return $ Set.singleton $ Clo(l, ρ)   
-     arg ρ (Ref v) = gets $ flip fetch (ρ!v) . first
+     arg ρ (Lam l) = return $ Clo(l, ρ)   
+     arg ρ (Ref v) = getsNDSet $ flip fetch (ρ!v) 
      
-     a $= d = alterFirst $ \ σ -> bind σ a d
+     a $= d = modify $ \ σ -> bind σ a (Set.singleton d)
 
-     alloc v = gets (valloc v . third)
+     alloc v = asks (valloc v . snd)
      
-     tick ps = do Just proc <- gets second
-                  alterThird $ advance proc ps
-
-  -- stepAnalysis _ config state = ((), gf (mnext state) config)
-
-  -- inject call = ((call, Map.empty), (), (Nothing, σ0, τ0))
+     tick proc ps = local $ \(_, t) -> (Just proc, advance proc ps t)
 
 -- Garbage Collection
-instance GarbageCollector (GenericAnalysis (ProcCh a, s, t)) (PΣ a)
+instance (Lattice s0, Lattice s) =>
+         GarbageCollector (GenericAnalysis s0 s (ProcCh a, t)) (PΣ a)
+
+
+instance (Lattice s, Ord a, Ord g, Ord s) => 
+         FPCalc (GenericAnalysis (Set (PΣ a, s, g)) s g) (PΣ a) where
+  hasSeen p =
+    do g <- ask
+       s <- get
+       lift $ lift $ gets $ Set.member (p, s, g)
+  markSeen p = 
+    do g <- ask
+       s <- get
+       lift $ lift $ modify $ Set.insert (p, s, g)
+
+

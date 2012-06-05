@@ -25,19 +25,24 @@ import CFA.Lattice
 import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
+import CFA.CPS.Analysis.Runner
 
 data CAddr = CBind Var Int
   deriving (Eq, Ord, Show)
 
-type ΣC = (Store CAddr, Int)
+type DStore a = a :-> (Val a)
+
+type ΣC = (DStore CAddr, Int)
+
 
 alterStore = mapFst
 increaseTime = mapSnd (+1)
 
 -- is a monad
 type Concrete = StateT ΣC Identity
+type FPSConcrete = StateT (Set (PΣ CAddr, ΣC)) Concrete
 
-readA :: CAddr -> Concrete (D CAddr)
+readA :: CAddr -> Concrete (Val CAddr)
 readA a = gets $ (! a) . fst 
 
 getTime :: Concrete Int
@@ -45,22 +50,22 @@ getTime = gets snd
 
 instance Analysis Concrete CAddr where
   fun ρ (Lam l) = return $ Clo (l, ρ)
-  fun ρ (Ref v) = do [proc] <- liftM Set.toList $ readA (ρ!v)
-                     return proc
-  arg ρ (Lam l) = let proc = Clo(l, ρ) in return $ Set.singleton proc
+  fun ρ (Ref v) = readA (ρ!v)
+
+  arg ρ (Lam l) = let proc = Clo(l, ρ) in return proc
   arg ρ (Ref v) = readA (ρ!v)
 
-  a $= d = modify $ alterStore $ \ σ -> σ ⨆ [a ==> d]
+  a $= d = modify $ alterStore $ Map.insert a d 
 
   alloc v = CBind v <$> getTime
 
-  tick _ = modify increaseTime
+  tick _ _ go = modify increaseTime >> go
 
-stepConcrete :: ΣC -> PΣ CAddr -> (PΣ CAddr, ΣC)
+stepConcrete :: ΣC -> PΣ CAddr -> (Maybe (PΣ CAddr), ΣC)
 stepConcrete config state = runState (mnext state) config
 
 initialΣC :: ΣC
-initialΣC = (bot, 0)
+initialΣC = (Map.empty, 0)
 
 injectConcrete :: CExp -> (PΣ CAddr, ΣC)
 injectConcrete call = ((call, ρ0), initialΣC)
@@ -68,4 +73,27 @@ injectConcrete call = ((call, ρ0), initialΣC)
 
 -- Add Garbage Collection
 instance GarbageCollector Concrete (PΣ CAddr)
+
+instance GarbageCollector (StateT s Concrete) (PΣ CAddr) where
+  gc a = lift $ gc a
+
+
+instance FPCalc FPSConcrete (PΣ CAddr) where
+  hasSeen p = do store <- lift get
+                 gets (Set.member (p, store))
+  markSeen p = do store <- lift get
+                  modify (Set.insert (p, store))
+
+
+instance Analysis (StateT s Concrete) CAddr where
+  fun ρ f = lift $ fun ρ f
+  arg ρ f = lift $ arg ρ f
+  a $= d = lift $ a $= d
+  alloc v = lift $ alloc v
+  tick proc ps go = StateT $ \s -> tick proc ps $ runStateT go s
+
+
+
+exploreConcrete :: CExp -> Set (PΣ CAddr, ΣC)
+exploreConcrete p = evalState (execStateT (explore p) (Set.empty :: Set (PΣ CAddr, ΣC))) initialΣC
 

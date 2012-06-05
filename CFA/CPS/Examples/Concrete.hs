@@ -8,6 +8,7 @@ import CFA.CPS
 import CFA.Lattice
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.Runner
+import CFA.CPS.Analysis.Interpreter
 
 ----------------------------------------------------------------------
 -- concrete interpreter
@@ -31,7 +32,7 @@ omega = Call ucombx [ucomby]
 
 ----------------------------------------------------------------------
 
-type ConcreteGuts = (Store CAddr, Int)
+type ConcreteGuts = (DStore CAddr, Int)
 
 concreteResult :: CExp -> Set (PΣ CAddr, ConcreteGuts)
 concreteResult = exploreConcrete

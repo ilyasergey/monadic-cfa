@@ -16,6 +16,7 @@ import Data.List as L
 
 import CFA.Lattice
 import CFA.CFAMonads
+import CFA.CPS.Analysis.NonShared
 import CFA.Store
 
 import CFA.AFJ
@@ -27,7 +28,7 @@ import CFA.AFJ.Analysis
 type D a = ℙ (Storable a)
 
 instance (StoreLike Addr s (D Addr), Truncatable Time) 
-   => Analysis (GenericAnalysis)
+   => Analysis (GenericAnalysis s (ProcCh Addr, Time))
                Addr                        -- address type
                ()                          -- no shared result
                (Time, s)                   -- Generic Analysis' guts

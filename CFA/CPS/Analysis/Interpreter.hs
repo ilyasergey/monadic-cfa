@@ -27,24 +27,19 @@ readIOAddr = readIORef . unIOAddr
 writeIOAddr :: IOAddr -> Val IOAddr -> IO ()
 writeIOAddr = writeIORef . unIOAddr
 
-fromSingleton :: Set a -> a
-fromSingleton = go . Set.toList
-  where go [v] = v
-        go _ = error "ERROR fromSingleton: Not a singleton!"
-
 instance Analysis IO IOAddr where
   fun ρ (Lam l) = return $ Clo (l, ρ)
   fun ρ (Ref v) = readIOAddr (ρ ! v)
 
-  arg ρ (Lam l) = return $ Set.singleton $ Clo (l, ρ)
-  arg ρ (Ref v) = Set.singleton <$> readIOAddr (ρ!v)
+  arg ρ (Lam l) = return $ Clo (l, ρ)
+  arg ρ (Ref v) = readIOAddr (ρ!v)
 
   -- TODO: why does arg return a Set?
-  addr $= v = writeIOAddr addr (fromSingleton v)
+  addr $= v = writeIOAddr addr v
 
   alloc v = MkIOAddr <$> newIORef undefined
 
-  tick _ = return ()
+  tick _ _ go = go
 
 instance FPCalc IO (PΣ IOAddr) where
   -- no fixed point calculations here...

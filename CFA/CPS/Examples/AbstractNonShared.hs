@@ -5,9 +5,14 @@ import Data.Set as Set
 import Data.List as List
 
 import CFA.CPS
+import CFA.CFAMonads
 import CFA.Lattice
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.Runner
+import Control.Monad.State
+import Control.Monad.List
+import Control.Monad.Identity
+import Control.Monad.Reader
 
 ----------------------------------------------------------------------
 -- abstract interpreter with a per-state store
@@ -15,6 +20,7 @@ import CFA.CPS.Analysis.Runner
 
 import CFA.CPS.KCFA
 import CFA.CPS.Analysis.NonShared
+import CFA.CPS.Analysis.ReallyNonShared
 
 ----------------------------------------------------------------------
 -- example program
@@ -35,7 +41,19 @@ omega = Call ucombx [ucomby]
 instance KCFA KTime where
   getK = const 1
 
-type AbstractGuts = (ProcCh KAddr, Store KAddr, KTime)
+type AbstractGuts = (ProcCh KAddr, KTime)
+initialGuts :: AbstractGuts
+initialGuts = (Nothing, τ0)
 
-abstractResultC :: CExp -> ((), Set (PΣ KAddr, AbstractGuts))
-abstractResultC = explore 
+abstractResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
+abstractResultC e = fst go
+  where 
+    go :: (Set (PΣ KAddr, Store KAddr, AbstractGuts), [(Store KAddr, [()])])
+    go = runIdentity $ runSSListT0 $ runSSListT0 $ runReaderT (explore e) initialGuts
+
+
+reallyNonSharedResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
+reallyNonSharedResultC e = fst go
+  where
+    go :: (Set (PΣ KAddr, Store KAddr, AbstractGuts), [((), Store KAddr)])
+    go = runIdentity $ runSSListT0 $ runStateT (runReaderT (explore e) initialGuts) bot 
