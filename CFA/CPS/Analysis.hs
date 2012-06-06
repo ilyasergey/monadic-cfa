@@ -5,6 +5,8 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TupleSections #-}
+
 
 -- TODO: get rid of this
 {-# LANGUAGE UndecidableInstances #-}
@@ -14,6 +16,7 @@ module CFA.CPS.Analysis where
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
+import Control.Monad
 
 import CFA.CPS
 import CFA.Lattice
@@ -52,16 +55,31 @@ class Monad m => Analysis m a | m -> a where
 -- Generic transition
 ----------------------------------------------------------------------  
 mnext :: (Analysis m a, GarbageCollector m (PΣ a)) => PΣ a -> m (Maybe (PΣ a))
-mnext ps@(Call f aes, ρ) = do  
-  proc@(Clo (vs :=> call', ρ')) <- fun ρ f
-  tick proc ps $ do
-  as  <- mapM alloc vs
-  ds  <- mapM (arg ρ) aes 
-  ρ'' <- updateEnv ρ' [ v ==> a | v <- vs | a <- as ]
-  sequence [ a $= d | a <- as | d <- ds ]
-  let sn = (call', ρ'')
-  gc sn
-  return $! Just sn
+
+
+mnext ps@(Call f aes, ρ) = 
+  let tick' m' = \proc -> tick proc ps m' 
+      g m = (\(sn1, _) -> return $! Just sn1) =<<
+            (\sn -> liftM (sn, ) $ gc sn) =<<
+            (\(call'4, ρ''1, _) -> return (call'4, ρ''1)) =<<
+            (\(as2, ds1, call'3, ρ'') -> liftM (call'3, ρ'',) $ sequence [ a $= d | a <- as2 | d <- ds1 ]) =<<
+            (\(as1, vs2, call'2, ρ'2, ds) -> liftM (as1, ds, call'2, ) $ updateEnv ρ'2 [ v ==> a | v <- vs2 | a <- as1 ]) =<<
+            (\(vs1, call'1, ρ1, ρ'1, as) -> liftM (as, vs1, call'1, ρ'1,) $ mapM (arg ρ1) aes) =<<
+            (\proc@(Clo (vs :=> call', ρ')) -> liftM (vs, call', ρ, ρ', ) $ mapM alloc vs) =<< m
+      m0  = fun ρ f
+   in m0 >>= (tick' . g) m0
+      
+-- mnext ps@(Call f aes, ρ) = do  
+--   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
+--   tick proc ps $ do
+--   as  <- mapM alloc vs
+--   ds  <- mapM (arg ρ) aes 
+--   ρ'' <- updateEnv ρ' [ v ==> a | v <- vs | a <- as ]
+--   sequence [ a $= d | a <- as | d <- ds ]
+--   let sn = (call', ρ'')
+--   gc sn
+--   return $! Just sn
+
 mnext ps@(Exit, ρ) = return Nothing
 
 ----------------------------------------------------------------------
