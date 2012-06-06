@@ -66,7 +66,8 @@ mnext ps@(Call f aes, ρ) =
             (\(as1, vs2, call'2, ρ'2, ds) -> liftM (as1, ds, call'2, ) $ updateEnv ρ'2 [ v ==> a | v <- vs2 | a <- as1 ]) =<<
             (\(vs1, call'1, ρ1, ρ'1, as) -> liftM (as, vs1, call'1, ρ'1,) $ mapM (arg ρ1) aes) =<<
             (\proc@(Clo (vs :=> call', ρ')) -> liftM (vs, call', ρ, ρ', ) $ mapM alloc vs) =<< m
-      h m = m >>= (tick' . g) m
+      k = (tick' . g)
+      h m = m >>= k m
    in h $ fun ρ f
       
 -- mnext ps@(Call f aes, ρ) = do  
