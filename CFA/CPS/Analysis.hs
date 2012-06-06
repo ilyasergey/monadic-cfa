@@ -84,7 +84,7 @@ class (Ord a, Eq a) => Addressable a c | c -> a where
 -- Free Variables
 free' :: CExp -> Set Var -> Set Var
 free' Exit bound = Set.empty
-free' (Call f as) bound = foldl (\res -> \a -> res ⊔ (free a bound)) 
+free' (Call f as) bound = List.foldl (\res -> \a -> res ⊔ (free a bound)) 
                                 (free f bound) as
 
 free :: AExp -> Set Var -> Set Var

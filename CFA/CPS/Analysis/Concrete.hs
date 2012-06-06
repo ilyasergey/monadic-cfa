@@ -39,7 +39,7 @@ alterStore = mapFst
 increaseTime = mapSnd (+1)
 
 -- is a monad
-type Concrete = StateT ΣC Identity
+type Concrete = State ΣC 
 type FPSConcrete = StateT (Set (PΣ CAddr, ΣC)) Concrete
 
 readA :: CAddr -> Concrete (Val CAddr)

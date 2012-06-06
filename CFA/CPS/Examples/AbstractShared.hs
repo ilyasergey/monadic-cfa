@@ -5,6 +5,7 @@ import Data.Set as Set
 import Data.List as List
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Monad.Identity
 
 import CFA.CPS
 import CFA.CFAMonads
@@ -45,6 +46,6 @@ initialGutsSS :: AbstractGutsSS
 initialGutsSS = (Nothing, τ0) 
 
 abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)
-abstractResultSSC e = snd go 
-  where go :: ((Store KAddr, [()]), (Set (PΣ KAddr, AbstractGutsSS), Store KAddr))
-        go = runState (runSSListT0 $ runReaderT (explore e) initialGutsSS) bot
+abstractResultSSC e = snd $ fst go 
+  where go :: ((Store KAddr, (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)), [()])
+        go = runIdentity $ runSSListT0 $ runReaderT (explore e) initialGutsSS

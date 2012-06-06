@@ -40,7 +40,7 @@ instance (Addressable a t, StoreLike a s (D a), Lattice s0)
   => Analysis (GenericAnalysis s0 s (ProcCh a, t)) a
               where
      fun ρ (Lam l) = return $ Clo(l, ρ)
-     fun ρ (Ref v) = getsM $ pureNDSet . (flip fetch $ ρ!v) 
+     fun ρ (Ref v) = getsM $ lift . lift . pureNDSet . (flip fetch $ ρ!v)
         
      arg ρ (Lam l) = return $ Clo(l, ρ)   
      arg ρ (Ref v) = getsNDSet $ flip fetch (ρ!v) 
