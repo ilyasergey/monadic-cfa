@@ -58,7 +58,7 @@ mnext :: (Analysis m a, GarbageCollector m (PΣ a)) => PΣ a -> m (Maybe (PΣ a)
 
 
 mnext ps@(Call f aes, ρ) = 
-  let tick' m' = \proc -> tick proc ps m' 
+  let tick' m = \proc -> tick proc ps m
       g m = (\(sn1, _) -> return $! Just sn1) =<<
             (\sn -> liftM (sn, ) $ gc sn) =<<
             (\(call'4, ρ''1, _) -> return (call'4, ρ''1)) =<<
@@ -66,8 +66,8 @@ mnext ps@(Call f aes, ρ) =
             (\(as1, vs2, call'2, ρ'2, ds) -> liftM (as1, ds, call'2, ) $ updateEnv ρ'2 [ v ==> a | v <- vs2 | a <- as1 ]) =<<
             (\(vs1, call'1, ρ1, ρ'1, as) -> liftM (as, vs1, call'1, ρ'1,) $ mapM (arg ρ1) aes) =<<
             (\proc@(Clo (vs :=> call', ρ')) -> liftM (vs, call', ρ, ρ', ) $ mapM alloc vs) =<< m
-      m0  = fun ρ f
-   in m0 >>= (tick' . g) m0
+      h m = m >>= (tick' . g) m
+   in h $ fun ρ f
       
 -- mnext ps@(Call f aes, ρ) = do  
 --   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
