@@ -45,6 +45,9 @@ type AbstractGuts = (ProcCh KAddr, KTime)
 initialGuts :: AbstractGuts
 initialGuts = (Nothing, τ0)
 
+fixf :: (a -> a) -> a
+fixf f = f (fixf f)
+
 abstractResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
 abstractResultC e = fst go
   where 

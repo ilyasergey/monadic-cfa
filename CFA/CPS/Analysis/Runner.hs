@@ -49,15 +49,20 @@ import Debug.Trace
 -- mapSAO :: (o -> o_) -> StoreAnd o a s d -> StoreAnd o_ a s d 
 -- mapSAO f (SAO (o,s)) = SAO (f o, s)
 
-class Monad m => FPCalc m a | m -> a where
-  hasSeen :: a -> m Bool
-  markSeen :: a -> m ()
+class Monad m => FPCalc m s | m -> s where
+  hasSeen :: s -> m Bool
+  markSeen :: s -> m ()
 
 ifNotSeen :: FPCalc m s => s -> m () -> m ()
 ifNotSeen s go = do seen <- hasSeen s
                     when (not seen) $ do
                     markSeen s
                     go
+
+addToFP :: (FPCalc m s, MonadPlus m) => s -> m s -> m s
+addToFP s cont = do seen <- hasSeen s
+                    if seen then return s
+                      else return s `mplus` (markSeen s >> cont)
 
 -- ifNotSeen :: s -> ReaderT (Set s) m () -> ReaderT (Set s) m ()
 -- ifNotSeen s go = do seen <- asks (Set.member s)
@@ -72,8 +77,15 @@ explore c = loop (c , ρ0) 0
         loop c step =
           trace ("loop [step " ++ show step ++ "]:\n" ++ show c ++ "\n") $
           -- for consistency with old code: tick off new state only
-          --tickOffAndCont c $ 
+          -- ifNotSeen c $ 
           do nc <- mnext c
              flip (maybe (return ())) nc $ \nc -> 
                ifNotSeen nc $ loop nc (step + 1)
 
+exploreFp' :: forall m a. (Show a, Analysis m a, MonadPlus m,
+                           GarbageCollector m (PΣ a), FPCalc m (PΣ a)) =>
+                CExp -> m (PΣ a) -> m (PΣ a)
+exploreFp' c k = addToFP (c, ρ0) $ do s <- k
+                                      nc <- mnext s
+                                      maybe (return s) return nc
+                                
