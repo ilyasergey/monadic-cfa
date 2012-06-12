@@ -46,6 +46,6 @@ initialGutsSS :: AbstractGutsSS
 initialGutsSS = (Nothing, τ0) 
 
 abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)
-abstractResultSSC e = snd $ fst go 
-  where go :: ((Store KAddr, (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)), [()])
+abstractResultSSC e = snd $ snd go 
+  where go :: ([()], (Store KAddr, (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)))
         go = runIdentity $ runSSListT0 $ runReaderT (explore e) initialGutsSS

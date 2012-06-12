@@ -53,7 +53,9 @@ instance (Addressable a t, StoreLike a s (D a), Lattice s0)
 
 -- Garbage Collection
 instance (Lattice s0, Lattice s) =>
-         GarbageCollector (GenericAnalysis s0 s (ProcCh a, t)) (PΣ a)
+         GarbageCollector (GenericAnalysis s0 s (ProcCh a, t)) (PΣ a) where
+           gc m = mapReaderT (mergeSharedState . mapSharedState mergeSharedState) m
+         
 
 
 instance (Lattice s, Ord a, Ord g, Ord s) => 

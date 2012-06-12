@@ -79,6 +79,7 @@ explore c = loop (c , ρ0) 0
           -- for consistency with old code: tick off new state only
           -- ifNotSeen c $ 
           do nc <- mnext c
+             --trace ("explore nc: " ++ show nc) $ do
              flip (maybe (return ())) nc $ \nc -> 
                ifNotSeen nc $ loop nc (step + 1)
 

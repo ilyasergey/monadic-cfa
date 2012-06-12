@@ -49,14 +49,14 @@ fixf :: (a -> a) -> a
 fixf f = f (fixf f)
 
 abstractResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
-abstractResultC e = fst go
+abstractResultC e = snd go
   where 
-    go :: (Set (PΣ KAddr, Store KAddr, AbstractGuts), [(Store KAddr, [()])])
+    go :: ([([()], Store KAddr)], Set (PΣ KAddr, Store KAddr, AbstractGuts))
     go = runIdentity $ runSSListT0 $ runSSListT0 $ runReaderT (explore e) initialGuts
 
 
 reallyNonSharedResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
-reallyNonSharedResultC e = fst go
+reallyNonSharedResultC e = snd go
   where
-    go :: (Set (PΣ KAddr, Store KAddr, AbstractGuts), [((), Store KAddr)])
+    go :: ([((), Store KAddr)], Set (PΣ KAddr, Store KAddr, AbstractGuts))
     go = runIdentity $ runSSListT0 $ runStateT (runReaderT (explore e) initialGuts) bot 
