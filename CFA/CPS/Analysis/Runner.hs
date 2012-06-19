@@ -3,11 +3,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module CFA.CPS.Analysis.Runner where
 
@@ -17,6 +18,7 @@ import Data.List as List
 import Data.Traversable
 import Data.Foldable as Foldable
 import Control.Monad.Trans
+import Control.Monad.Identity
 import Control.Monad.State
 import Control.Applicative
 
@@ -80,13 +82,33 @@ explore c = loop (c , ρ0) 0
           -- ifNotSeen c $ 
           do nc <- mnext c
              --trace ("explore nc: " ++ show nc) $ do
-             flip (maybe (return ())) nc $ \nc -> 
-               ifNotSeen nc $ loop nc (step + 1)
+             ifNotSeen nc $ loop nc (step + 1)
 
-exploreFp' :: forall m a. (Show a, Analysis m a, MonadPlus m,
-                           GarbageCollector m (PΣ a), FPCalc m (PΣ a)) =>
-                CExp -> m (PΣ a) -> m (PΣ a)
-exploreFp' c k = addToFP (c, ρ0) $ do s <- k
-                                      nc <- mnext s
-                                      maybe (return s) return nc
-                                
+findFP :: forall a m. (Monad m, Lattice a) => (a -> m a) -> m a
+findFP f = loop bot
+  where loop :: a -> m a
+        loop c = do c' <- f c
+                    if c' ⊑ c
+                    then return c
+                    else loop c' 
+
+reachableStep :: (Monad m, Ord a, Foldable t) => (a -> m (t a)) -> a -> ℙ a -> m (ℙ a)
+reachableStep mnext init =
+  Foldable.foldr
+    (liftM2 (flip $ Foldable.foldr Set.insert) . mnext)
+    (return $ Set.singleton init)
+
+class AddStepToFP m a fp | m -> a, m -> fp, fp -> m where
+  applyStep :: (a -> m a) -> fp -> fp
+  inject :: a -> fp
+
+data Phantom1 (m :: * -> *) where
+  Booh :: Phantom1 m
+
+exploreFP :: forall m a fp .
+             (Lattice fp, AddStepToFP m (PΣ a) fp, GarbageCollector m (PΣ a),
+              Analysis m a, Show a) =>
+             CExp -> fp
+exploreFP c = runIdentity $ findFP (Identity . loop) 
+  where loop :: fp -> fp
+        loop acc = inject (c, ρ0) ⊔ applyStep mnext acc

@@ -86,5 +86,5 @@ instance Lattice a => Monoid (MeetMonoid a) where
   mempty = top
   mappend = (⊓)
 
-join :: Lattice a => [a] -> a
-join l = withJoinMonoid $ mconcat $ List.map JoinMonoid l
+ljoin :: Lattice a => [a] -> a
+ljoin l = withJoinMonoid $ mconcat $ List.map JoinMonoid l

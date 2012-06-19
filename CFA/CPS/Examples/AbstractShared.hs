@@ -41,11 +41,13 @@ omega = Call ucombx [ucomby]
 instance KCFA KTime where
   getK = const 1
 
+
 type AbstractGutsSS = (ProcCh KAddr, KTime)
-initialGutsSS :: AbstractGutsSS 
-initialGutsSS = (Nothing, τ0) 
+
+-- abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)
+-- abstractResultSSC e = snd $ snd go 
+--   where go :: ([()], (Store KAddr, (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)))
+--         go = runIdentity $ runSSListT0 $ runReaderT (explore e) initialGutsSS
 
 abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)
-abstractResultSSC e = snd $ snd go 
-  where go :: ([()], (Store KAddr, (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)))
-        go = runIdentity $ runSSListT0 $ runReaderT (explore e) initialGutsSS
+abstractResultSSC e = exploreFP e

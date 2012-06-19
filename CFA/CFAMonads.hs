@@ -1,8 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -20,7 +22,7 @@ import Control.Monad.Identity
 import Control.Monad.Trans
 import Control.Applicative
 import Data.Monoid
-import Data.Foldable hiding (msum)
+import Data.Foldable as Foldable hiding (msum)
 import Data.Traversable as Trav
 import Data.List.Class as ListC
 
@@ -64,14 +66,17 @@ instance MonadTrans (SharedStateListT s) where
 listToListT :: Monad n => n [a] -> ListT n a
 listToListT = (>>= ListC.fromList) . lift
 
-flattenListT :: Monad n => ListT n a -> n [a]
-flattenListT = ListC.toList
+collectListT :: Monad n => ListT n a -> n [a]
+collectListT = ListC.toList
 
-flattenSSListT :: Monad n => SharedStateListT s n a -> s -> n [(a,s)]
-flattenSSListT = (flattenListT.) . runStateT . runSSListT
+collectSSListT :: Monad n => SharedStateListT s n a -> s -> n [(a,s)]
+collectSSListT = (collectListT.) . runStateT . runSSListT
 
-flattenSSListTS :: (Lattice s, Monad n) => SharedStateListT s n a -> s -> n ([a],s)
-flattenSSListTS = (liftM mergeState.) . flattenSSListT
+collectSSListTS :: (Lattice s, Monad n) => SharedStateListT s n a -> s -> n ([a],s)
+collectSSListTS = (liftM mergeState.) . collectSSListT
+
+collectSSListTST :: (Lattice s, Monad n) => SharedStateListT s n a -> StateT s n [a]
+collectSSListTST = StateT . collectSSListTS
 
 makeSSListT :: Monad n => (s -> n [(a,s)]) -> SharedStateListT s n a
 makeSSListT f = SSListT $ StateT $ listToListT . f
@@ -86,7 +91,7 @@ mergeSharedState (SSListT (StateT f)) = SSListT $ StateT $ listToListT . liftM m
 
 mapSharedState :: (Monad m, Monad n, Lattice s) => (forall v. n v -> m v) ->
                   SharedStateListT s n a -> SharedStateListT s m a 
-mapSharedState f m = SSListT $ StateT $ \s -> mapListT f $ runStateT (runSSListT m) s
+mapSharedState f m = SSListT $ mapStateT (mapListT f) (runSSListT m)
 
 -- SharedStateListT s n a = s -> n (s, [a])
 --     abstracts
@@ -107,7 +112,7 @@ toShared :: (Monad n, Lattice s) => StateT s (ListT n) a -> SharedStateListT s n
 toShared = SSListT 
 
 runSSListT0 :: (Monad n, Lattice s) => SharedStateListT s n a -> n ([a], s)
-runSSListT0 m = liftM mergeState $ flattenSSListT m bot
+runSSListT0 m = liftM mergeState $ collectSSListT m bot
 
 -- type MyAnalysis a = StateT g (SharedStateListT s Identity a)
 --                   = g -> (SharedStateListT s Identity (g, a)
@@ -119,9 +124,7 @@ askSSLT = do env <- lift ask
              return env
 
 localSSLT :: (Lattice s, MonadReader env m) => (env -> env) -> SharedStateListT s m v -> SharedStateListT s m v
-localSSLT f m =
-  SSListT $ StateT $ \s ->
-  transformListMonad (local f) $ runStateT (runSSListT m) s
+localSSLT f m = mapSharedState (local f) m
 
 -- instance (Lattice s, MonadReader env m) =>
 --          MonadReader env (SharedStateListT s m) where
@@ -145,4 +148,10 @@ getsM f = get >>= f
 
 asksM :: (MonadReader s (t m), Monad m, MonadTrans t) => (s -> m a) -> t m a
 asksM f = asks f >>= lift
+
+commaM :: Monad m => m a -> m b -> m (a,b)
+commaM = liftM2 (,)
+
+liftTup :: Monad t => (t a, b) -> t (a,b)
+liftTup (ma,b) = liftM (flip (,) b) ma
 

@@ -39,7 +39,7 @@ omega = Call ucombx [ucomby]
 ----------------------------------------------------------------------
 
 instance KCFA KTime where
-  getK = const 1
+  getK = const 2
 
 type AbstractGuts = (ProcCh KAddr, KTime)
 initialGuts :: AbstractGuts
@@ -48,15 +48,24 @@ initialGuts = (Nothing, τ0)
 fixf :: (a -> a) -> a
 fixf f = f (fixf f)
 
-abstractResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
-abstractResultC e = snd go
-  where 
-    go :: ([([()], Store KAddr)], Set (PΣ KAddr, Store KAddr, AbstractGuts))
-    go = runIdentity $ runSSListT0 $ runSSListT0 $ runReaderT (explore e) initialGuts
+-- abstractResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
+-- abstractResultC e = snd go
+--   where 
+--     go :: ([([()], Store KAddr)], Set (PΣ KAddr, Store KAddr, AbstractGuts))
+--     go = runIdentity $ runSSListT0 $ runSSListT0 $ runReaderT (explore e) initialGuts
 
 
-reallyNonSharedResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
-reallyNonSharedResultC e = snd go
-  where
-    go :: ([((), Store KAddr)], Set (PΣ KAddr, Store KAddr, AbstractGuts))
-    go = runIdentity $ runSSListT0 $ runStateT (runReaderT (explore e) initialGuts) bot 
+-- reallyNonSharedResultC :: CExp -> Set (PΣ KAddr, Store KAddr, AbstractGuts)
+-- reallyNonSharedResultC e = snd go
+--   where
+--     go :: ([((), Store KAddr)], Set (PΣ KAddr, Store KAddr, AbstractGuts))
+--     go = runIdentity $ runSSListT0 $ runStateT (runReaderT (explore e) initialGuts) bot 
+
+reallyNonSharedResultC :: CExp -> Set ((PΣ KAddr, AbstractGuts), Store KAddr)
+reallyNonSharedResultC e = runRNSAnalysis e
+
+reallyNonSharedResultC_ :: CExp -> Set ((PΣ KAddr, AbstractGuts), Store KAddr)
+reallyNonSharedResultC_ e = unRNSFP $ exploreFP e
+
+nonSharedResultC :: CExp -> Set ((PΣ KAddr, AbstractGuts), Store KAddr)
+nonSharedResultC e = exploreFP e

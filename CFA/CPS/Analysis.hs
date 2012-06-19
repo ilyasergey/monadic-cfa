@@ -56,7 +56,7 @@ class Monad m => Analysis m a | m -> a where
 ----------------------------------------------------------------------  
 -- Generic transition
 ----------------------------------------------------------------------  
-mnext :: (Analysis m a, GarbageCollector m (PΣ a), Show a) => PΣ a -> m (Maybe (PΣ a))
+mnext :: (Analysis m a, GarbageCollector m (PΣ a), Show a) => PΣ a -> m (PΣ a)
 
 
 -- mnext ps@(Call f aes, ρ) = 
@@ -72,7 +72,7 @@ mnext :: (Analysis m a, GarbageCollector m (PΣ a), Show a) => PΣ a -> m (Maybe
 --       h m = m >>= k m
 --    in h $ fun ρ f
       
-mnext ps@(Call f aes, ρ) = liftM Just $ gc $ do  
+mnext ps@(Call f aes, ρ) = gc $ do  
   --trace ("mnext, f: " ++ show f) $ do
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick proc ps $ do
@@ -83,7 +83,7 @@ mnext ps@(Call f aes, ρ) = liftM Just $ gc $ do
   let sn = (call', ρ'')
   return $! sn
 
-mnext ps@(Exit, ρ) = return Nothing
+mnext ps@(Exit, ρ) = return ps
 
 ----------------------------------------------------------------------
  -- Addresses, Stores and Choices
