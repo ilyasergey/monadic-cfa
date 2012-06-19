@@ -14,6 +14,7 @@ module CFA.CPS.Analysis.Concrete where
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
+import Data.Foldable as Foldable
 import Control.Monad.State
 import Control.Monad.Identity
 import Control.Applicative
@@ -40,7 +41,6 @@ increaseTime = mapSnd (+1)
 
 -- is a monad
 type Concrete = State ΣC 
-type FPSConcrete = StateT (Set (PΣ CAddr, ΣC)) Concrete
 
 readA :: CAddr -> Concrete (Val CAddr)
 readA a = gets $ (! a) . fst 
@@ -61,9 +61,6 @@ instance Analysis Concrete CAddr where
 
   tick _ _ go = modify increaseTime >> go
 
-stepConcrete :: ΣC -> PΣ CAddr -> (Maybe (PΣ CAddr), ΣC)
-stepConcrete config state = runState (mnext state) config
-
 initialΣC :: ΣC
 initialΣC = (Map.empty, 0)
 
@@ -74,26 +71,11 @@ injectConcrete call = ((call, ρ0), initialΣC)
 -- Add Garbage Collection
 instance GarbageCollector Concrete (PΣ CAddr)
 
-instance GarbageCollector (StateT s Concrete) (PΣ CAddr) where
-  gc a = lift $ gc a
+instance AddStepToFP Concrete (PΣ CAddr) (ℙ (PΣ CAddr, ΣC)) where
+  applyStep step states = Set.map (uncurry $ runState . step) states
+  inject s = Set.singleton (s, initialΣC)
+  
 
-
-instance FPCalc FPSConcrete (PΣ CAddr) where
-  hasSeen p = do store <- lift get
-                 gets (Set.member (p, store))
-  markSeen p = do store <- lift get
-                  modify (Set.insert (p, store))
-
-
-instance Analysis (StateT s Concrete) CAddr where
-  fun ρ f = lift $ fun ρ f
-  arg ρ f = lift $ arg ρ f
-  a $= d = lift $ a $= d
-  alloc v = lift $ alloc v
-  tick proc ps go = StateT $ \s -> tick proc ps $ runStateT go s
-
-
-
-exploreConcrete :: CExp -> Set (PΣ CAddr, ΣC)
-exploreConcrete p = evalState (execStateT (explore p) (Set.empty :: Set (PΣ CAddr, ΣC))) initialΣC
+exploreConcrete :: CExp -> ℙ (PΣ CAddr, ΣC)
+exploreConcrete = exploreFP
 

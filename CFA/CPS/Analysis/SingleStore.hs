@@ -28,17 +28,15 @@ import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.Runner
---import CFA.CPS.Analysis.SingleStore.SingleStoreGC
 
 import Util
 
 type SharedAnalysis s g = StateT g (SharedStateListT s Identity)
--- type SharedAnalysis s0 s g = ReaderT g (SharedStateListT (s0, s) Identity))
--- type SharedAnalysis s0 s g = g -> s -> s0 -> (s0, s, [(a]))
-
--- SharedAnalysis s0 s g a =
---                        SharedStateListT s (State (g, s0)) a
---                        s -> (g, s0) -> ((s, [a]), (g, s0))
+-- SharedAnalysis s g a =
+--   StateT g (SharedStateListT s Identity) a
+--   g -> SharedStateListT s Identity (a,g)
+--   g -> s -> Identity [((a,g),s)]    (more or less)
+--   g -> s -> [((a,g),s)]
 
 instance (Addressable a t, StoreLike a s (D a), Lattice s, Show a, Show s) =>
          Analysis (SharedAnalysis s (ProcCh a, t)) a where
@@ -55,8 +53,6 @@ instance (Addressable a t, StoreLike a s (D a), Lattice s, Show a, Show s) =>
      tick proc ps k = do modify $ \(_, t) -> (Just proc, advance proc ps t)
                          k
 
---     exit = mzero
-
 instance (Ord a, StoreLike a s (D a)) 
   => GarbageCollector (SharedAnalysis s g) (PΣ a) where
   gc m = mapStateT mergeSharedState $ do
@@ -66,34 +62,6 @@ instance (Ord a, StoreLike a s (D a))
     lift $ modify $ \ σ -> filterStore σ (\a -> Set.member a rs)
     return ps
     
--- instance (Ord g, Ord a, Lattice s, Show a) =>
---          FPCalc (SharedAnalysis (Set (PΣ a, g), s) s g) (PΣ a) where
---   hasSeen p = do
---     s <- gets fst
---     (s0, sOld) <- gets snd
---     g <- lift ask
---     let seen = Set.member (p,g) s0 && s ⊑ sOld
---     return seen
---   markSeen p = do
---     g <- lift ask
---     s <- gets fst
---     modify $ mapSnd $
---       \(seenStates, prevStore) -> (Set.insert (p, g) seenStates, s ⊔ prevStore)
-
-
--- analysis :: 
---   (Ord s, Ord a, Ord t, StoreLike a s (D a), Show a, Addressable a t, Show s) =>
---   CExp -> ℙ (PΣ a, (ProcCh a, t)) ->
---   State s (ℙ (PΣ a, (ProcCh a, t)))
--- analysis c =
---   reachableStep (\(p, g) ->
---                   collectSSListTST (runStateT (mnext p) g)) ((c, ρ0), (Nothing, τ0))
-
-
--- runAnalysis :: (Addressable a t, StoreLike a s (D a), Show a, Ord s, Ord t, Show s) =>
---                CExp -> (ℙ (PΣ a, (ProcCh a, t)), s)
--- runAnalysis c = runIdentity $ findFP (\(vs, s) -> runStateT (analysis c vs) s)
-
 initialGuts :: Addressable a t => (ProcCh a, t)
 initialGuts = (Nothing, τ0) 
 

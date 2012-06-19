@@ -41,13 +41,3 @@ instance Analysis IO IOAddr where
 
   tick _ _ go = go
 
-instance FPCalc IO (PΣ IOAddr) where
-  -- no fixed point calculations here...
-  hasSeen _ = return False
-  markSeen _ = return ()
-
-instance GarbageCollector IO (PΣ IOAddr) where
-  gc _ = return ()
-  
-interpret :: CExp -> IO ()
-interpret c = explore c 

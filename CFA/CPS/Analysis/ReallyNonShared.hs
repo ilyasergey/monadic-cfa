@@ -35,14 +35,12 @@ import Util
 
 type ReallyNonSharedAnalysis s g = StateT g (StateT s (ListT Identity))
 
--- ReallyNonSharedAnalysis s0 s g a =
---   SharedStateListT s (StateT g (SharedStateListT s0 Identity)) 
---   s -> StateT g (SharedStateListT s0 Identity) (s, [a])
---   s -> g -> s0 -> (s0, [(g, (s, [a]))])
-
--- instance (Addressable a t, StoreLike a s (D a), 
---           MonadState (s, ProcCh a, t) m, MonadPlus m) 
---   => Analysis m a
+-- ReallyNonSharedAnalysis s g a =
+--   StateT g (StateT s (ListT Identity)) a
+--   g -> StateT s (ListT Identity) (a, g)
+--   g -> s -> ListT Identity ((a, g), s)
+--   g -> s -> Identity [((a, g), s)]    (more or less :))
+--   g -> s -> [((a, g), s)]    
 
 instance (Addressable a t, StoreLike a s (D a)) 
   => Analysis (ReallyNonSharedAnalysis s (ProcCh a, t)) a
@@ -69,28 +67,6 @@ instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
     let rs = Set.map (\(v, a) -> a) (reachable ps σ)
     lift $ modify $ \ σ -> filterStore σ (\a -> Set.member a rs)
     return ps
-
--- instance (Lattice s, Ord a, Ord g, Ord s) => 
---          FPCalc (ReallyNonSharedAnalysis (Set (PΣ a, s, g)) s g) (PΣ a) where
---   hasSeen p =
---     do s <- get
---        g <- lift $ lift $ ask
---        lift $ gets $ Set.member (p, s, g)
---   markSeen p = 
---     do s <- get
---        g <- lift $ lift ask
---        lift $ modify $ Set.insert (p, s, g)
-
--- rnsAnalysis :: 
---   (Ord s, Ord a, Ord t, StoreLike a s (D a), Show a, Addressable a t) =>
---   CExp -> ℙ ((PΣ a, (ProcCh a, t)), s) ->
---   Identity (ℙ ((PΣ a, (ProcCh a, t)), s))
--- rnsAnalysis c = reachableStep (\((p, g), s) -> collectListT $ runStateT (runStateT (mnext p) g) s) (((c, ρ0), (Nothing, τ0)), bot)
-
-
--- runRNSAnalysis :: (Addressable a t, StoreLike a s (D a), Show a, Ord s, Ord t) =>
---                CExp -> ℙ ((PΣ a, (ProcCh a, t)), s)
--- runRNSAnalysis c = runIdentity $ findFP (rnsAnalysis c)
 
 initialGuts :: Addressable a t => (ProcCh a, t)
 initialGuts = (Nothing, τ0) 

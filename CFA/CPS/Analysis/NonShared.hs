@@ -34,10 +34,12 @@ import Util
 
 type NonSharedAnalysis s g =
   StateT g (SharedStateListT s (ListT Identity))
--- NonSharedAnalysis s0 s g a =
---   SharedStateListT s (StateT g (SharedStateListT s0 Identity)) 
---   s -> StateT g (SharedStateListT s0 Identity) (s, [a])
---   s -> g -> s0 -> (s0, [(g, (s, [a]))])
+-- NonSharedAnalysis s g a =
+-- StateT g (SharedStateListT s (ListT Identity)) a
+-- g -> SharedStateListT s (ListT Identity) (a, g)    (more or less)
+-- g -> s -> ListT Identity [((a, g),s)]              (more or less)
+-- g -> s -> Identity [[((a, g),s)]]
+-- g -> s -> [[((a, g),s)]]
 
 instance (Addressable a t, StoreLike a s (D a)) 
   => Analysis (NonSharedAnalysis s (ProcCh a, t)) a
@@ -65,33 +67,6 @@ instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
     lift $ modify $ \ σ -> filterStore σ (\a -> Set.member a rs)
     return ps
          
-
-
--- instance (Lattice s, Ord a, Ord g, Ord s) => 
---          FPCalc (NonSharedAnalysis (Set (PΣ a, s, g)) s g) (PΣ a) where
---   hasSeen p =
---     do g <- lift $ lift ask
---        s <- get
---        lift $ gets $ Set.member (p, s, g)
---   markSeen p = 
---     do g <- lift $ lift ask
---        s <- get
---        lift $ modify $ Set.insert (p, s, g)
-
-
--- analysis :: 
---   (Ord s, Ord a, Ord t, StoreLike a s (D a), Show a, Addressable a t) =>
---   CExp -> ℙ ((PΣ a, (ProcCh a, t)), s) ->
---   Identity (ℙ ((PΣ a, (ProcCh a, t)), s))
--- analysis c =
---   reachableStep (\((p, g), s) ->
---                   liftM concat $ collectListT $ collectSSListT (runStateT (mnext p) g) s)
---     (((c, ρ0), (Nothing, τ0)), bot)
-
-
--- runAnalysis :: (Addressable a t, StoreLike a s (D a), Show a, Ord s, Ord t) =>
---                CExp -> ℙ ((PΣ a, (ProcCh a, t)), s)
--- runAnalysis c = runIdentity $ findFP (analysis c)
 
 initialGuts :: Addressable a t => (ProcCh a, t)
 initialGuts = (Nothing, τ0) 
