@@ -56,7 +56,7 @@ class Monad m => Analysis m a | m -> a where
 ----------------------------------------------------------------------  
 -- Generic transition
 ----------------------------------------------------------------------  
-mnext :: (Analysis m a, GarbageCollector m (PΣ a), Show a) => PΣ a -> m (PΣ a)
+mnext :: (Analysis m a, Show a) => PΣ a -> m (PΣ a)
 
 
 -- mnext ps@(Call f aes, ρ) = 
@@ -72,7 +72,7 @@ mnext :: (Analysis m a, GarbageCollector m (PΣ a), Show a) => PΣ a -> m (PΣ a
 --       h m = m >>= k m
 --    in h $ fun ρ f
       
-mnext ps@(Call f aes, ρ) = gc $ do  
+mnext ps@(Call f aes, ρ) = do  
   --trace ("mnext, f: " ++ show f) $ do
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
   tick proc ps $ do

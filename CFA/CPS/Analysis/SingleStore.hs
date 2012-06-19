@@ -57,7 +57,7 @@ instance (Addressable a t, StoreLike a s (D a), Lattice s, Show a, Show s) =>
 
 --     exit = mzero
 
-instance (Ord a, StoreLike a s (D a), Show s, Show a) 
+instance (Ord a, StoreLike a s (D a)) 
   => GarbageCollector (SharedAnalysis s g) (PΣ a) where
   gc m = mapStateT mergeSharedState $ do
     ps <- m
@@ -97,9 +97,9 @@ instance (Ord a, StoreLike a s (D a), Show s, Show a)
 initialGuts :: Addressable a t => (ProcCh a, t)
 initialGuts = (Nothing, τ0) 
 
-instance (Ord t, Ord a, Lattice s, Addressable a t) =>
+instance (Ord t, Ord a, Lattice s, Addressable a t, StoreLike a s (D a)) =>
          AddStepToFP (SharedAnalysis s (ProcCh a, t)) (PΣ a) (ℙ (PΣ a, (ProcCh a, t)), s) where
   applyStep step (states, s) = 
-    Foldable.foldr (\(p, g) -> (⊔) $ mapFst Set.fromList $ runIdentity $ collectSSListTS (runStateT (step p) g) s) bot states
+    Foldable.foldr (\(p, g) -> (⊔) $ mapFst Set.fromList $ runIdentity $ collectSSListTS (runStateT (gc $ step p) g) s) bot states
   inject a = (Set.singleton (a, initialGuts), bot)
                                

@@ -97,12 +97,12 @@ initialGuts :: Addressable a t => (ProcCh a, t)
 initialGuts = (Nothing, τ0) 
 
 
-instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s) =>
+instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s, StoreLike a s (D a)) =>
          AddStepToFP (NonSharedAnalysis s (ProcCh a, t)) (PΣ a)
          (Set ((PΣ a, (ProcCh a, t)), s)) where
   applyStep step fp =
     Foldable.foldr
       (\((p,g),s) -> Set.union $ Set.fromList $ concat $ runIdentity $
-                     collectListT (collectSSListT (runStateT (step p) g) s))
+                     collectListT (collectSSListT (runStateT (gc $ step p) g) s))
       bot fp
   inject p = Set.singleton $ ((p, initialGuts), bot)

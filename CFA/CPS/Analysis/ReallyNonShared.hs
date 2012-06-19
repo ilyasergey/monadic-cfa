@@ -60,8 +60,6 @@ instance (Addressable a t, StoreLike a s (D a))
      tick proc ps k = do modify $ \(_, t) -> (Just proc, advance proc ps t)
                          k
 
---     exit = mzero
-
 -- Garbage Collection
 instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
          GarbageCollector (ReallyNonSharedAnalysis s (ProcCh a, t)) (PΣ a) where
@@ -99,12 +97,12 @@ initialGuts = (Nothing, τ0)
 
 newtype RNSFP a = RNSFP { unRNSFP :: a } deriving (Lattice)
 
-instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s) =>
+instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s, StoreLike a s (D a)) =>
          AddStepToFP (ReallyNonSharedAnalysis s (ProcCh a, t)) (PΣ a)
          (RNSFP (ℙ ((PΣ a, (ProcCh a, t)), s))) where
   applyStep step (RNSFP fp) =
     RNSFP $ Foldable.foldr
       (\ ((p,g),s) -> Set.union $ Set.fromList $ runIdentity $
-                      collectListT (runStateT (runStateT (step p) g) s))
+                      collectListT (runStateT (runStateT (gc $ step p) g) s))
       bot fp
   inject p = RNSFP $ Set.singleton $ ((p, initialGuts), bot)
