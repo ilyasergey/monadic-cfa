@@ -76,8 +76,7 @@ instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s, StoreLike a s (D a)) 
          AddStepToFP (NonSharedAnalysis s (ProcCh a, t)) (PΣ a)
          (ℙ ((PΣ a, (ProcCh a, t)), s)) where
   applyStep step fp =
-    Foldable.foldr
-      (\((p,g),s) -> Set.union $ Set.fromList $ concat $ runIdentity $
-                     collectListT (collectSSListT (runStateT (gc $ step p) g) s))
-      bot fp
+    joinWith (\((p,g),s) -> Set.fromList $ concat $ runIdentity $ 
+                            collectListT (collectSSListT (runStateT (gc $ step p) g) s))
+             fp
   inject p = Set.singleton $ ((p, initialGuts), bot)
