@@ -84,13 +84,10 @@ explore c = loop (c , ρ0) 0
              --trace ("explore nc: " ++ show nc) $ do
              ifNotSeen nc $ loop nc (step + 1)
 
-findFP :: forall a m. (Monad m, Lattice a) => (a -> m a) -> m a
+findFP :: forall a m. (Lattice a) => (a -> a) -> a
 findFP f = loop bot
-  where loop :: a -> m a
-        loop c = do c' <- f c
-                    if c' ⊑ c
-                    then return c
-                    else loop c' 
+  where loop :: a -> a
+        loop c = let c' = f c in if c' ⊑ c then c else loop c' 
 
 reachableStep :: (Monad m, Ord a, Foldable t) => (a -> m (t a)) -> a -> ℙ a -> m (ℙ a)
 reachableStep mnext init =
@@ -109,6 +106,6 @@ exploreFP :: forall m a fp .
              (Lattice fp, AddStepToFP m (PΣ a) fp, GarbageCollector m (PΣ a),
               Analysis m a, Show a) =>
              CExp -> fp
-exploreFP c = runIdentity $ findFP (Identity . loop) 
+exploreFP c = findFP loop
   where loop :: fp -> fp
         loop acc = inject (c, ρ0) ⊔ applyStep mnext acc
