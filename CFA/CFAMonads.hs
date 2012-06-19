@@ -155,3 +155,5 @@ commaM = liftM2 (,)
 liftTup :: Monad t => (t a, b) -> t (a,b)
 liftTup (ma,b) = liftM (flip (,) b) ma
 
+joinWith :: (Foldable t, Lattice a) => (b -> a) -> t b -> a
+joinWith f = Foldable.foldr ((⊔) . f) bot

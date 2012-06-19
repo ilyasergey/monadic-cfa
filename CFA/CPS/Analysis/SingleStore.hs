@@ -68,6 +68,7 @@ initialGuts = (Nothing, τ0)
 instance (Ord t, Ord a, Lattice s, Addressable a t, StoreLike a s (D a)) =>
          AddStepToFP (SharedAnalysis s (ProcCh a, t)) (PΣ a) (ℙ (PΣ a, (ProcCh a, t)), s) where
   applyStep step (states, s) = 
-    Foldable.foldr (\(p, g) -> (⊔) $ mapFst Set.fromList $ runIdentity $ collectSSListTS (runStateT (gc $ step p) g) s) bot states
+    joinWith (\(p,g) -> mapFst Set.fromList $ runIdentity $ collectSSListTS (runStateT (gc $ step p) g) s) states    
+
   inject a = (Set.singleton (a, initialGuts), bot)
                                

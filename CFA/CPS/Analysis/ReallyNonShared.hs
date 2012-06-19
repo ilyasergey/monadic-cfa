@@ -77,8 +77,8 @@ instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s, StoreLike a s (D a)) 
          AddStepToFP (ReallyNonSharedAnalysis s (ProcCh a, t)) (PΣ a)
          (RNSFP (ℙ ((PΣ a, (ProcCh a, t)), s))) where
   applyStep step (RNSFP fp) =
-    RNSFP $ Foldable.foldr
-      (\ ((p,g),s) -> Set.union $ Set.fromList $ runIdentity $
+    RNSFP $ joinWith 
+      (\ ((p,g),s) -> Set.fromList $ runIdentity $
                       collectListT (runStateT (runStateT (gc $ step p) g) s))
-      bot fp
+      fp
   inject p = RNSFP $ Set.singleton $ ((p, initialGuts), bot)
