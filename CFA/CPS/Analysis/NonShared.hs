@@ -99,7 +99,7 @@ initialGuts = (Nothing, τ0)
 
 instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s, StoreLike a s (D a)) =>
          AddStepToFP (NonSharedAnalysis s (ProcCh a, t)) (PΣ a)
-         (Set ((PΣ a, (ProcCh a, t)), s)) where
+         (ℙ ((PΣ a, (ProcCh a, t)), s)) where
   applyStep step fp =
     Foldable.foldr
       (\((p,g),s) -> Set.union $ Set.fromList $ concat $ runIdentity $
