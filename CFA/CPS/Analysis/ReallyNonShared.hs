@@ -40,7 +40,7 @@ type ReallyNonSharedAnalysis s g = StateT g (StateT s (ListT Identity))
 --   g -> StateT s (ListT Identity) (a, g)
 --   g -> s -> ListT Identity ((a, g), s)
 --   g -> s -> Identity [((a, g), s)]    (more or less :))
---   g -> s -> [((a, g), s)]    
+--   g -> s -> [((a, g), s)]
 
 instance (Addressable a t, StoreLike a s (D a)) 
   => Analysis (ReallyNonSharedAnalysis s (ProcCh a, t)) a
@@ -55,12 +55,11 @@ instance (Addressable a t, StoreLike a s (D a))
 
      alloc v = gets (valloc v . snd)
      
-     tick proc ps k = do modify $ \(_, t) -> (Just proc, advance proc ps t)
-                         k
+     tick proc ps = modify $ \(_, t) -> (Just proc, advance proc ps t)
 
 -- Garbage Collection
 instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
-         GarbageCollector (ReallyNonSharedAnalysis s (ProcCh a, t)) (PΣ a) where
+         GarbageCollector (ReallyNonSharedAnalysis s g) (PΣ a) where
   gc m = do
     ps <- m
     σ <- lift get
@@ -71,14 +70,21 @@ instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
 initialGuts :: Addressable a t => (ProcCh a, t)
 initialGuts = (Nothing, τ0) 
 
+class HasInitial g where
+  initial :: g
+
+instance Addressable a t => HasInitial (ProcCh a, t) where
+  initial = initialGuts
+
+  
 newtype RNSFP a = RNSFP { unRNSFP :: a } deriving (Lattice)
 
-instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s, StoreLike a s (D a)) =>
-         AddStepToFP (ReallyNonSharedAnalysis s (ProcCh a, t)) (PΣ a)
-         (RNSFP (ℙ ((PΣ a, (ProcCh a, t)), s))) where
+instance (Ord s, Ord a, Ord g, HasInitial g, Lattice s, StoreLike a s (D a)) =>
+         AddStepToFP (ReallyNonSharedAnalysis s g) (PΣ a)
+         (RNSFP (ℙ ((PΣ a, g), s))) where
   applyStep step (RNSFP fp) =
     RNSFP $ joinWith 
       (\ ((p,g),s) -> Set.fromList $ runIdentity $
                       collectListT (runStateT (runStateT (gc $ step p) g) s))
       fp
-  inject p = RNSFP $ Set.singleton $ ((p, initialGuts), bot)
+  inject p = RNSFP $ Set.singleton $ ((p, initial), bot)

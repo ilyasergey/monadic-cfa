@@ -48,7 +48,7 @@ class Monad m => Analysis m a | m -> a where
   updateEnv ρ bs = return $ ρ // bs
  
   alloc :: Var -> m a
-  tick :: Val a -> PΣ a -> m v -> m v
+  tick :: Val a -> PΣ a -> m ()
 
   -- stepAnalysis :: s -> g -> PΣ a -> (s, [(PΣ a, g)])
   -- inject :: CExp -> (PΣ a, s, g)
@@ -75,7 +75,7 @@ mnext :: (Analysis m a, Show a) => PΣ a -> m (PΣ a)
 mnext ps@(Call f aes, ρ) = do  
   --trace ("mnext, f: " ++ show f) $ do
   proc@(Clo (vs :=> call', ρ')) <- fun ρ f
-  tick proc ps $ do
+  tick proc ps 
   as  <- mapM alloc vs
   ds  <- mapM (arg ρ) aes 
   ρ'' <- updateEnv ρ' [ v ==> a | v <- vs | a <- as ]

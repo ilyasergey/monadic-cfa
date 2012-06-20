@@ -80,7 +80,7 @@ findFP f = loop bot
   where loop :: a -> a
         loop c = let c' = f c in if c' ⊑ c then c else loop c' 
 
-class AddStepToFP m a fp | m -> a, m -> fp, fp -> m where
+class AddStepToFP m a fp | m -> a, fp -> m where
   applyStep :: (a -> m a) -> fp -> fp
   inject :: a -> fp
 

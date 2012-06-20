@@ -28,6 +28,7 @@ import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.Runner
+import CFA.CPS.Analysis.ReallyNonShared
 
 import Util
 
@@ -38,37 +39,17 @@ type SharedAnalysis s g = StateT g (SharedStateListT s Identity)
 --   g -> s -> Identity [((a,g),s)]    (more or less)
 --   g -> s -> [((a,g),s)]
 
-instance (Addressable a t, StoreLike a s (D a), Lattice s, Show a, Show s) =>
-         Analysis (SharedAnalysis s (ProcCh a, t)) a where
-     fun ρ (Lam l) = return $ Clo(l, ρ)
-     fun ρ (Ref v) = lift $ getsNDSet $ flip fetch (ρ!v) 
-        
-     arg ρ (Lam l) = return $ Clo(l, ρ)   
-     arg ρ (Ref v) = lift $ getsNDSet $ flip fetch (ρ!v) 
-     
-     a $= d = lift $ modify $ \ σ -> bind σ a (Set.singleton d)
+alpha :: (Lattice s, Ord a, Ord g) =>
+        ℙ ((PΣ a, g), s) -> (ℙ (PΣ a, g), s)
+alpha = joinWith (\((p, g), s) -> (Set.singleton (p,g), s))
 
-     alloc v = gets (valloc v . snd)
-     
-     tick proc ps k = do modify $ \(_, t) -> (Just proc, advance proc ps t)
-                         k
+gamma :: (Ord a, Ord g, Ord s) =>
+        (ℙ (PΣ a, g), s) -> ℙ ((PΣ a, g), s)
+gamma (states, s) = Set.map (\(p, g) -> ((p,g), s)) states
 
-instance (Ord a, StoreLike a s (D a)) 
-  => GarbageCollector (SharedAnalysis s g) (PΣ a) where
-  gc m = mapStateT mergeSharedState $ do
-    ps <- m
-    σ <- lift get
-    let rs = Set.map (\(v, a) -> a) (reachable ps σ)
-    lift $ modify $ \ σ -> filterStore σ (\a -> Set.member a rs)
-    return ps
-    
-initialGuts :: Addressable a t => (ProcCh a, t)
-initialGuts = (Nothing, τ0) 
+instance (Ord g, Ord a, Lattice s, StoreLike a s (D a), Ord s, HasInitial g) =>
+         AddStepToFP (ReallyNonSharedAnalysis s g)  (PΣ a) (ℙ (PΣ a, g), s) where
+  applyStep step = alpha . unRNSFP . applyStep step . RNSFP . gamma 
 
-instance (Ord t, Ord a, Lattice s, Addressable a t, StoreLike a s (D a)) =>
-         AddStepToFP (SharedAnalysis s (ProcCh a, t)) (PΣ a) (ℙ (PΣ a, (ProcCh a, t)), s) where
-  applyStep step (states, s) = 
-    joinWith (\(p,g) -> mapFst Set.fromList $ runIdentity $ collectSSListTS (runStateT (gc $ step p) g) s) states    
-
-  inject a = (Set.singleton (a, initialGuts), bot)
+  inject a = (Set.singleton (a, initial), bot)
                                

@@ -54,8 +54,7 @@ instance (Addressable a t, StoreLike a s (D a))
 
      alloc v = gets $ valloc v . snd
      
-     tick proc ps k = do modify $ \(_, t) -> (Just proc, advance proc ps t)
-                         k
+     tick proc ps = modify $ \(_, t) -> (Just proc, advance proc ps t)
 
 -- Garbage Collection
 instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
