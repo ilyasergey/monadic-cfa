@@ -72,7 +72,14 @@ alpha = joinWith (\((p, g), s) -> (Set.singleton (p,g), s))
 
        \states -> joinWith (\((p,g),s) -> joinWith (\((p', g'),s') -> (Set.singleton (p',g'), s')) (Set.fromList $ runIdentity $ collectListT (runStateT (runStateT (gc $ step p) g) s))) states
 
-       \states -> joinWith (\((p,g),s) -> alpha (Set.fromList $ runIdentity $ collectListT (runStateT (runStateT (gc $ step p) g) s))) states
+-- step is monotonous...
+
+
+-- \states -> joinWith (\((p,g),_) -> joinWith (\((p', g'),s') -> (Set.singleton (p',g'), s')) $ Set.fromList $ runIdentity $ collectListT $ runStateT (runSSListT $ runStateT (gc $ step p) g) (joinWith (\((p,g),s) -> s) states)) states
+
+-- \states -> joinWith (\((p,g),_) -> mapFst Set.fromList $ mergeState $ runIdentity $ collectListT $ runStateT (runSSListT $ runStateT (gc $ step p) g) (joinWith (\((p,g),s) -> s) states)) states
+
+-- \states -> joinWith (\((p,g),_) -> mapFst Set.fromList $ runIdentity $ liftM mergeState $ collectListT $ runStateT (runSSListT $ runStateT (gc $ step p) g) (joinWith (\((p,g),s) -> s) states)) states
 
 -- \states -> joinWith (\((p,g),_) -> mapFst Set.fromList $ runIdentity $ collectSSListTS (runStateT (gc $ step p) g) (joinWith (\((p,g),s) -> s) states)) states
 
