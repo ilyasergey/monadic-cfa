@@ -59,12 +59,10 @@ instance (Addressable a t, StoreLike a s (D a))
 -- Garbage Collection
 instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
          GarbageCollector (NonSharedAnalysis s (ProcCh a, t)) (PΣ a) where
-  gc m = mapStateT mergeSharedState $ do
-    ps <- m
+  gc ps = do
     σ <- lift get
     let rs = Set.map (\(v, a) -> a) (reachable ps σ)
     lift $ modify $ \ σ -> filterStore σ (\a -> Set.member a rs)
-    return ps
          
 
 initialGuts :: Addressable a t => (ProcCh a, t)
@@ -76,6 +74,6 @@ instance (Ord s, Ord a, Ord t, Addressable a t, Lattice s, StoreLike a s (D a)) 
          (ℙ ((PΣ a, (ProcCh a, t)), s)) where
   applyStep step fp =
     joinWith (\((p,g),s) -> Set.fromList $ concat $ runIdentity $ 
-                            collectListT (collectSSListT (runStateT (gc $ step p) g) s))
+                            collectListT (collectSSListT (runStateT (mapStateT mergeSharedState $ do {x <- step p; gc x; return x }) g) s))
              fp
   inject p = Set.singleton $ ((p, initialGuts), bot)

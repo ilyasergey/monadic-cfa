@@ -60,12 +60,11 @@ instance (Addressable a t, StoreLike a s (D a))
 -- Garbage Collection
 instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
          GarbageCollector (ReallyNonSharedAnalysis s g) (PΣ a) where
-  gc m = do
-    ps <- m
+  gc ps = do
     σ <- lift get
     let rs = Set.map (\(v, a) -> a) (reachable ps σ)
     lift $ modify $ \ σ -> filterStore σ (\a -> Set.member a rs)
-    return ps
+    return ()
 
 initialGuts :: Addressable a t => (ProcCh a, t)
 initialGuts = (Nothing, τ0) 
@@ -77,14 +76,14 @@ instance Addressable a t => HasInitial (ProcCh a, t) where
   initial = initialGuts
 
   
-newtype RNSFP a = RNSFP { unRNSFP :: a } deriving (Lattice)
+newtype RNSFP a g s = RNSFP { unRNSFP :: ℙ ((PΣ a, g), s) } deriving (Lattice)
 
 instance (Ord s, Ord a, Ord g, HasInitial g, Lattice s, StoreLike a s (D a)) =>
          AddStepToFP (ReallyNonSharedAnalysis s g) (PΣ a)
-         (RNSFP (ℙ ((PΣ a, g), s))) where
+         (RNSFP a g s) where
   applyStep step (RNSFP fp) =
     RNSFP $ joinWith 
       (\ ((p,g),s) -> Set.fromList $ runIdentity $
-                      collectListT (runStateT (runStateT (gc $ step p) g) s))
+                      collectListT (runStateT (runStateT (do {x <- step p; gc x; return x}) g) s))
       fp
   inject p = RNSFP $ Set.singleton $ ((p, initial), bot)
