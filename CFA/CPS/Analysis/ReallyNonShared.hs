@@ -51,7 +51,7 @@ instance (Addressable a t, StoreLike a s (D a))
      arg ρ (Lam l) = return $ Clo(l, ρ)   
      arg ρ (Ref v) = lift $ getsNDSet $ flip fetch (ρ!v) 
      
-     a $= d = lift $ modify $ \ σ -> bind σ a (Set.singleton d)
+     a $= d = lift $ modify $ \σ -> bind σ a (Set.singleton d)
 
      alloc v = gets (valloc v . snd)
      

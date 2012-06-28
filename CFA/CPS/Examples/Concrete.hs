@@ -11,12 +11,6 @@ import CFA.CPS.Analysis.Runner
 import CFA.CPS.Analysis.Interpreter
 
 ----------------------------------------------------------------------
--- concrete interpreter
-----------------------------------------------------------------------
-
-import CFA.CPS.Analysis.Concrete
-
-----------------------------------------------------------------------
 -- example program
 ----------------------------------------------------------------------
 
@@ -32,7 +26,5 @@ omega = Call ucombx [ucomby]
 
 ----------------------------------------------------------------------
 
-type ConcreteGuts = (DStore CAddr, Int)
-
-concreteResult :: CExp -> Set (PΣ CAddr, ConcreteGuts)
-concreteResult = exploreConcrete
+concreteResult :: CExp -> IO (PΣ IOAddr)
+concreteResult = interpret

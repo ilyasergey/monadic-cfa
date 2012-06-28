@@ -17,9 +17,9 @@ import CFA.Store
 
 data A = A
 
-data IOAddr = MkIOAddr { unIOAddr :: IORef (Val IOAddr) } deriving (Eq)
-instance Show IOAddr where
-  show a = "{IOAddr ...}"
+data IOAddr = MkIOAddr { unIOAddr :: IORef (Val IOAddr) } 
+     deriving (Eq)
+instance Show IOAddr where show a = "{IOAddr ...}"
 
 readIOAddr :: IOAddr -> IO (Val IOAddr)
 readIOAddr = readIORef . unIOAddr
@@ -34,10 +34,13 @@ instance Analysis IO IOAddr where
   arg ρ (Lam l) = return $ Clo (l, ρ)
   arg ρ (Ref v) = readIOAddr (ρ!v)
 
-  -- TODO: why does arg return a Set?
   addr $= v = writeIOAddr addr v
-
   alloc v = MkIOAddr <$> newIORef undefined
+  tick _ _ = return ()
 
-  tick _ _ go = go
-
+interpret :: CExp -> IO (PΣ IOAddr)
+interpret e = go (e, ρ0)
+    where go :: (PΣ IOAddr) -> IO (PΣ IOAddr)
+          go s = do s' <- mnext s 
+                    case s' of x@(Exit, _) -> return x
+                               y           -> go y

@@ -56,7 +56,7 @@ class Monad m => Analysis m a | m -> a where
 ----------------------------------------------------------------------  
 -- Generic transition
 ----------------------------------------------------------------------  
-mnext :: (Analysis m a, Show a) => PΣ a -> m (PΣ a)
+mnext :: (Analysis m a) => PΣ a -> m (PΣ a)
 
 
 -- mnext ps@(Call f aes, ρ) = 

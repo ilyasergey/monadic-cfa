@@ -84,8 +84,8 @@ class AddStepToFP m a fp | m -> a, fp -> m where
   applyStep :: (a -> m a) -> fp -> fp
   inject :: a -> fp
 
-exploreFP :: forall m a fp .
-             (Lattice fp, AddStepToFP m (PΣ a) fp, Analysis m a, Show a) =>
+exploreFP :: forall m a fp.
+             (Lattice fp, AddStepToFP m (PΣ a) fp, Analysis m a) =>
              CExp -> fp
 exploreFP c = findFP loop
   where loop :: fp -> fp
