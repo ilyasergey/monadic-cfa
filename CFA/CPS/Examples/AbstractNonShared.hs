@@ -61,11 +61,11 @@ fixf f = f (fixf f)
 --     go :: ([((), Store KAddr)], Set (PΣ KAddr, Store KAddr, AbstractGuts))
 --     go = runIdentity $ runSSListT0 $ runStateT (runReaderT (explore e) initialGuts) bot 
 
-reallyNonSharedResultC :: CExp -> Set ((PΣ KAddr, AbstractGuts), Store KAddr)
-reallyNonSharedResultC e = runRNSAnalysis e
+-- reallyNonSharedResultC :: CExp -> Set ((PΣ KAddr, AbstractGuts), Store KAddr)
+-- reallyNonSharedResultC e = runRNSAnalysis e
 
 reallyNonSharedResultC_ :: CExp -> Set ((PΣ KAddr, AbstractGuts), Store KAddr)
-reallyNonSharedResultC_ e = unRNSFP $ exploreFP e
+reallyNonSharedResultC_ e = unRNSFP $ exploreFP mnext (e, ρ0)
 
 nonSharedResultC :: CExp -> Set ((PΣ KAddr, AbstractGuts), Store KAddr)
-nonSharedResultC e = exploreFP e
+nonSharedResultC e = exploreFP mnext (e, ρ0)

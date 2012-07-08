@@ -16,6 +16,7 @@ import CFA.CPS.Analysis.Runner
 
 import CFA.CPS.KCFA
 import CFA.CPS.Analysis.NonShared
+import CFA.CPS.Analysis.ReallyNonShared
 
 ----------------------------------------------------------------------
 -- example program
@@ -36,7 +37,7 @@ omega = Call ucombx [ucomby]
 instance KCFA KTime where
   getK = const 1
 
-type AbstractGutsWithCounting = (ProcCh KAddr, StoreWithCount KAddr (D KAddr), KTime)
+type AbstractGuts = (ProcCh KAddr, KTime)
 
-abstractResultC :: CExp -> ((), Set (PΣ KAddr, AbstractGutsWithCounting))
-abstractResultC = explore 
+abstractResultC :: CExp -> Set ((PΣ KAddr, AbstractGuts), StoreWithCount KAddr (D KAddr)) 
+abstractResultC e = exploreFP mnext (e, ρ0)

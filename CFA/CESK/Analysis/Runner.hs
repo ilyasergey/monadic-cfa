@@ -33,7 +33,7 @@ loop worklist v@(shared, oldStates) step =
                                     stepAnalysis shared config state)
                                     worklist 
       -- compute a new shared component and new states
-      (shared', states') = foldl (\(s, bg) -> \(s', bg') -> (s ⊔ s', bg ++ bg'))
+      (shared', states') = List.foldl (\(s, bg) -> \(s', bg') -> (s ⊔ s', bg ++ bg'))
                                  (shared, []) newStoreStates
       newWorkList = List.filter (\elem -> not (Set.member elem oldStates)) states'
    in if List.null newWorkList

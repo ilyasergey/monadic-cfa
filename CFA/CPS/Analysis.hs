@@ -82,8 +82,7 @@ mnext ps@(Call f aes, ρ) = do
   sequence [ a $= d | a <- as | d <- ds ]
   let sn = (call', ρ'')
   return $! sn
-
-mnext ps@(Exit, ρ) = return ps
+mnext ps = return ps
 
 ----------------------------------------------------------------------
  -- Addresses, Stores and Choices

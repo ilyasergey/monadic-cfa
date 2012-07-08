@@ -13,9 +13,6 @@ import Control.Applicative
 import CFA.CPS
 import CFA.CPS.Analysis
 import CFA.CPS.Analysis.Runner
-import CFA.Store
-
-data A = A
 
 data IOAddr = MkIOAddr { unIOAddr :: IORef (Val IOAddr) } 
      deriving (Eq)

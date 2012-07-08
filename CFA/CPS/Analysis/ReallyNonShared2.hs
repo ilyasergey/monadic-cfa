@@ -11,7 +11,7 @@
 -- TODO: get rid of this
 {-# LANGUAGE UndecidableInstances #-}
 
-module CFA.CPS.Analysis.ReallyNonShared where
+module CFA.CPS.Analysis.ReallyNonShared2 where
 
 import Data.Maybe
 import Data.Map as Map
@@ -42,20 +42,20 @@ type ReallyNonSharedAnalysis s g = StateT g (StateT s (ListT Identity))
 --   g -> s -> Identity [((a, g), s)]    (more or less :))
 --   g -> s -> [((a, g), s)]
 
-instance (Addressable a t, StoreLike a s (D a)) 
-  => Analysis (ReallyNonSharedAnalysis s (ProcCh a, t)) a
-              where
+instance (Addressable a t) 
+         => Analysis (ReallyNonSharedAnalysis (Store a) t) a
+     where
      fun ρ (Lam l) = return $ Clo(l, ρ)
-     fun ρ (Ref v) = lift $ getsNDSet $ (flip fetch $ ρ!v) 
+     fun ρ (Ref v) = lift $ getsNDSet $ \σ -> σ!(ρ!v) 
         
      arg ρ (Lam l) = return $ Clo(l, ρ)   
-     arg ρ (Ref v) = lift $ getsNDSet $ flip fetch (ρ!v) 
+     arg ρ (Ref v) = lift $ getsNDSet $ \σ -> σ!(ρ!v)
      
-     a $= d = lift $ modify $ \σ -> bind σ a (Set.singleton d)
+     a $= d = lift $ modify $ \σ -> Map.insert a (Set.singleton d) σ
 
-     alloc v = gets (valloc v . snd)
+     alloc v = gets (valloc v)
      
-     tick proc ps = modify $ \(_, t) -> (Just proc, advance proc ps t)
+     tick proc ps = modify $ \t -> advance proc ps t
 
 -- Garbage Collection
 instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>

@@ -70,10 +70,9 @@ instance (Ord s, Ord a, Ord g, HasInitial g, Lattice s) =>
       fp
   inject p = Set.singleton $ ((p, initial), bot)
 
-runAnalysis :: CExp -> Set ((PΣ Integer, Integer), Store Integer)
-runAnalysis e = exploreFP e
-
 idx  = Lam (["x"] :=> Call (Ref "x") [])
 idy  = Lam (["y"] :=> Exit)
 comb = Lam (["f", "g"] :=> Call (Ref "f") [Ref "g"])
 ex   = Call comb [idx, idy]
+
+result e = runAnalysis e :: ℙ ((PΣ Integer, Integer), Store Integer)

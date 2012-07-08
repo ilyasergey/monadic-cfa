@@ -140,7 +140,8 @@ pureNDSet = pureND . Set.toList
 getsND :: (MonadPlus m, MonadState s m) => (s -> [a]) -> m a
 getsND f = gets f >>= pureND
 
-getsNDSet :: (MonadPlus m, MonadState s m) => (s -> Set a) -> m a
+getsNDSet :: (MonadPlus m, MonadState s m) => 
+             (s -> Set a) -> m a
 getsNDSet f = getsND (Set.toList . f)
 
 getsM :: (MonadState s m, Monad m) => (s -> m a) -> m a

@@ -39,5 +39,5 @@ instance KCFA KTime where
 
 type AbstractGutsSS = (ProcCh KAddr, KTime)
 
-abstractResultSSC :: CExp -> (StoreWithCount KAddr (D KAddr), Set (PΣ KAddr, AbstractGutsSS))
-abstractResultSSC = explore  
+abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), StoreWithCount KAddr (D KAddr))
+abstractResultSSC e = exploreFP mnext (e, ρ0)

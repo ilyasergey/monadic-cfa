@@ -5,9 +5,9 @@ import Data.Set as Set
 import Data.List as List
 
 import CFA.CPS
-import CFA.Lattice
+--import CFA.Lattice
 import CFA.CPS.Analysis
-import CFA.CPS.Analysis.Runner
+--import CFA.CPS.Analysis.Runner
 import CFA.CPS.Analysis.Interpreter
 
 ----------------------------------------------------------------------
@@ -28,3 +28,6 @@ omega = Call ucombx [ucomby]
 
 concreteResult :: CExp -> IO (PΣ IOAddr)
 concreteResult = interpret
+
+
+

@@ -1,8 +1,6 @@
 GHC=ghc -XTypeSynonymInstances -XParallelListComp -XTypeOperators -XMultiParamTypeClasses -XFlexibleInstances
 
-
-all: cps cesk afj
-
+all: cps 
 
 
 cps: CPSConcrete CPSAbstractNonShared CPSAbstractNonSharedCount CPSAbstractShared CPSAbstractSharedCount

@@ -13,7 +13,8 @@ import Data.List as List
 import CFA.Lattice
 
 -- Store uniquely defines the type of its addresses
-class (Eq a, Lattice s, Lattice d) => StoreLike a s d | s->a, s->d where
+class  (Eq a, Lattice s, Lattice d) 
+       => StoreLike a s d | s->a, s->d where
   σ0 :: s
   bind :: s -> a -> d -> s
   replace :: s -> a -> d -> s

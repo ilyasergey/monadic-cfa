@@ -50,4 +50,4 @@ type AbstractGutsSS = (ProcCh KAddr, KTime)
 --         go = runIdentity $ runSSListT0 $ runReaderT (explore e) initialGutsSS
 
 abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)
-abstractResultSSC e = exploreFP e
+abstractResultSSC e = exploreFP mnext (e, ρ0)
