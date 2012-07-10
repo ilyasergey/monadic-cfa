@@ -11,10 +11,17 @@ module CFA.CESK.Analysis.Concrete where
 
 import Data.Map as Map
 import Data.Set as Set
+import Data.List as List
+import Data.Traversable
+import Control.Monad.State
+import Control.Monad.ListT
+import Control.Monad.Identity
+import Control.Monad.Reader
 
 import CFA.Lattice
 import CFA.Store
 import CFA.CFAMonads
+import CFA.Runner
 
 import CFA.CESK
 import CFA.CESK.Analysis
@@ -25,50 +32,40 @@ import CFA.CESK.Analysis
 
 type Store a = a :-> (Storable a)
 
-instance Analysis Concrete 
-                  Addr 
-                  () 
-                  (Time, State Addr, Store Addr) where
-  tick ctx@(Ref (_, _), ρ, a) = Concrete (\(t, s, σ) -> ((), (t, ctx, σ)))
-  tick ctx@(App (_, _, l), ρ, a) = Concrete (\(t, s, σ) -> ((), (TLab l (contour t), ctx, σ)))
-  tick ctx@(v, ρ, a) = Concrete (\(t, s, σ) -> 
-                        case t of 
-                          TLab l ctr -> (let (Cont κ) = σ ! a
-                                         in case κ of 
-                                            Mt   -> ((), (TMt (l:ctr), ctx, σ))
-                                            Ar _ -> ((), (TLab l ctr, ctx, σ))
-                                            Fn _ -> ((), (TMt (l:ctr), ctx, σ)))
-                          _          -> ((), (t, s, σ)))
+instance Analysis (StorePassingSemantics (Store Addr) (Time, PState Addr)) Addr where
 
-  getVar ρ x = Concrete (\(t, s, σ) -> 
-                 let (Val clo) = σ ! (ρ ! x)
-                  in (clo, (t, s, σ)))
+  tick ctx@(Ref (_, _), ρ, a) = modify $ \(t, _) -> (t, ctx)
+  tick ctx@(App (_, _, l), ρ, a) = modify $ \(t, _) -> (TLab l (contour t), ctx)
+  tick ctx@(v, ρ, a) = do (t, s) <- get
+                          σ      <- lift get
+                          case t of 
+                            TLab l ctr -> 
+                                 let (Cont κ) = σ ! a
+                                  in case κ of 
+                                       Mt   -> put (TMt (l:ctr), ctx)
+                                       Ar _ -> put (TLab l ctr, ctx)
+                                       Fn _ -> put (TMt (l:ctr), ctx)
+                            _          -> return ()
 
-  putVar ρ x b c = Concrete (\(t, s, σ) -> 
-                 let σ' = σ // [(b, Val c)]
-                  in (ρ // [(x, b)], (t, s, σ')))
+  getVar ρ x = lift $ getsNDSet (\σ -> let (Val clo) = σ ! (ρ ! x)
+                                       in Set.singleton(clo))
 
-  loadCont a  = Concrete (\(t, s, σ) -> 
+  putVar ρ x b c = (lift $ modify $ \σ -> σ // [(b, Val c)]) >> 
+                   (return $ ρ // [(x, b)])
+                  
+  loadCont a  = lift $ getsNDSet (\σ -> 
                  let (Cont κ) = σ ! a
-                  in (κ, (t, s, σ)))
+                  in Set.singleton κ)
 
-  storeCont b κ = Concrete (\(t, s, σ) -> 
-                 let σ' = σ // [(b, Cont κ)]
-                  in ((), (t, s, σ')))
+  storeCont b κ = lift $ modify $ \σ -> σ // [(b, Cont κ)]
 
-  alloc _     = Concrete (\(t, s, σ) -> do
-                  (allocC t s σ, (t, s, σ)))
-
-  stepAnalysis _ config state = ((), [cf (mstep state) config])
-
-  inject call = let initState = (call, Map.empty, Call "mt" [])
-                    a0 = Call "mt" []
-                 in (initState, (), (TMt [], initState, Map.empty // [(a0, Cont Mt)]))
-  
+  alloc _       =  do (t, s) <- get
+                      σ      <- lift get
+                      return $ allocC t s σ 
 
 -- Concrete allocator function
 -- Turns the last captured time moment into the address
-allocC :: Time -> State Addr -> Store Addr -> Addr
+allocC :: Time -> PState Addr -> Store Addr -> Addr
 allocC t (App (e0, _, _), _ ,_) σ = Call (lab e0) (contour t)
 allocC t (Lam _, _, a) σ = 
       case σ ! a of
@@ -76,4 +73,12 @@ allocC t (Lam _, _, a) σ =
         Cont (Fn ((x, _), _, _)) -> Bind x (contour t)
 
 
-instance GarbageCollector (Concrete () (Time, State Addr, Store Addr)) (State Addr)
+instance AddStepToFP (StorePassingSemantics (Store Addr) (Time, PState Addr)) 
+                     (PState Addr)
+                     (Set (PState Addr, Time, Store Addr)) where
+  applyStep step =
+    joinWith 
+      (\(p, t, σ) -> Set.fromList $ List.map (\((a, (b, c)), d) -> (a, b, d)) $
+                            runIdentity $
+                            collectListT (runStateT (runStateT (step p) (t, p)) σ))
+  inject p = Set.singleton $ (p, initial, Map.empty)

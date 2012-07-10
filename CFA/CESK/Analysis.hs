@@ -13,36 +13,27 @@ import Data.Map as Map
 import Data.Set as Set
 
 import CFA.Lattice
-import CFA.Store
-
 import CFA.CESK
+import CFA.Runner
 
 ----------------------------------------------------------------------  
 -- Abstract analysis interface.
 ----------------------------------------------------------------------  
-class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where 
-  tick      :: State a -> m s g ()
-  getVar    :: Env a -> Var -> m s g (Clo a)
-  putVar    :: Env a -> Var -> a -> Clo a -> m s g (Env a)
-  loadCont  :: a -> m s g (Kont a)
-  storeCont :: a -> Kont a -> m s g ()
-  alloc     :: () -> m s g a
-
-  stepAnalysis :: s -> g -> State a -> (s, [(State a, g)])
-  inject :: Exp -> (State a, s, g)
-
+class Monad m => Analysis m a | m -> a where 
+  tick      :: PState a -> m ()
+  getVar    :: Env a -> Var -> m (Clo a)
+  putVar    :: Env a -> Var -> a -> Clo a -> m (Env a)
+  loadCont  :: a -> m (Kont a)
+  storeCont :: a -> Kont a -> m ()
+  alloc     :: () -> m a
 
 -- A small-step monadic semantics for CESK* machine
 -- in Store- and Time- passing style
 
--- The underlying monad implemens a `time-state-store-passing style'
--- in order to disguise `alloc' calls, which use both time and state
--- (at least, in the abstract case)
-
 ----------------------------------------------------------------------  
 -- Generic transition
 ----------------------------------------------------------------------  
-mstep :: (Analysis m a s g) => State a -> m s g (State a)
+mstep :: (Analysis m a) => PState a -> m (PState a)
 mstep ctx@(Ref (x, l), ρ, a) = do
   tick ctx
   Clo (v, ρ', l) <- getVar ρ x
@@ -64,3 +55,12 @@ mstep ctx@(Lam (v, l), ρ, a) = do
       b <- alloc ()
       ρ'' <- putVar ρ' x b (Clo (v, ρ, l))
       return (e, ρ'', c)
+
+----------------------------------------------------------------------
+ -- Running the analysis
+----------------------------------------------------------------------
+
+runAnalysis :: (Lattice fp , AddStepToFP m (PState a) fp, 
+                HasInitial a, Analysis m a) =>
+               Exp -> fp
+runAnalysis e = exploreFP mstep (e, Map.empty, initial)

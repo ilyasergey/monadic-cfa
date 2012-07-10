@@ -29,20 +29,11 @@ import CFA.Lattice
 import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
-import CFA.CPS.Analysis.Runner
+import CFA.Runner
 
 import Util
 
-type TwoLevelAnalysis s g = StateT g (StateT s (ListT Identity))
-
--- TwoLevelAnalysis s g a =
---   StateT g (StateT s (ListT Identity)) a
---   g -> StateT s (ListT Identity) (a, g)
---   g -> s -> ListT Identity ((a, g), s)
---   g -> s -> Identity [((a, g), s)]    (more or less :))
---   g -> s -> [((a, g), s)]
-
-instance Analysis (TwoLevelAnalysis (Store Integer) Integer) Integer
+instance Analysis (StorePassingSemantics (Store Integer) Integer) Integer
               where
      fun ρ (Lam l) = return $ Clo(l, ρ)
      fun ρ (Ref v) = lift $ getsNDSet $ \σ -> σ!(ρ!v) 
@@ -57,12 +48,9 @@ instance Analysis (TwoLevelAnalysis (Store Integer) Integer) Integer
 instance HasInitial Integer where
   initial = 0
 
-class HasInitial g where
-  initial :: g
-
 instance (Ord s, Ord a, Ord g, HasInitial g, Lattice s) =>
-         AddStepToFP (TwoLevelAnalysis s g) (PΣ a)
-         (ℙ ((PΣ a, g), s)) where
+         AddStepToFP (StorePassingSemantics s g) a
+         (ℙ ((a, g), s)) where
   applyStep step fp =
     joinWith 
       (\((p,t),s) -> Set.fromList $ runIdentity $

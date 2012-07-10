@@ -1,9 +1,12 @@
 GHC=ghc -XTypeSynonymInstances -XParallelListComp -XTypeOperators -XMultiParamTypeClasses -XFlexibleInstances
 
-all: cps 
+all: cps cesk afj
 
+# Abstract machine for Lambda calculus in CPS
+cps: CPSSimple CPSConcrete CPSAbstractNonShared CPSAbstractNonSharedCount CPSAbstractShared CPSAbstractSharedCount
 
-cps: CPSConcrete CPSAbstractNonShared CPSAbstractNonSharedCount CPSAbstractShared CPSAbstractSharedCount
+CPSSimple: CFA/CPS/Examples/Concrete.hs
+	$(GHC) --make CFA/CPS/Analysis/SimpleAnalysis.hs
 
 CPSConcrete: CFA/CPS/Examples/Concrete.hs
 	$(GHC) --make CFA/CPS/Examples/Concrete.hs
@@ -20,8 +23,7 @@ CPSAbstractShared: CFA/CPS/Examples/AbstractShared.hs
 CPSAbstractSharedCount: CFA/CPS/Examples/AbstractSharedCount.hs
 	$(GHC) --make CFA/CPS/Examples/AbstractSharedCount.hs
 
-
-
+# CESK machine for Lambda calculus
 cesk: CESKConcrete CESKAbstractNonShared
 
 CESKConcrete: CFA/CESK/Examples/Concrete.hs
@@ -30,8 +32,7 @@ CESKConcrete: CFA/CESK/Examples/Concrete.hs
 CESKAbstractNonShared: CFA/CESK/Examples/AbstractNonShared.hs
 	$(GHC) --make CFA/CESK/Examples/AbstractNonShared.hs
 
-
-
+# CESK machine for A-Normal Featherweight Java
 afj: AFJAbstractNonShared
 
 AFJAbstractNonShared: CFA/AFJ/Examples/AbstractNonShared.hs

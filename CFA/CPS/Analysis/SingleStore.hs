@@ -27,24 +27,17 @@ import CFA.Lattice
 import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
-import CFA.CPS.Analysis.Runner
+import CFA.Runner
 import CFA.CPS.Analysis.ReallyNonShared
 
 import Util
 
-type SharedAnalysis s g = StateT g (SharedStateListT s Identity)
--- SharedAnalysis s g a =
---   StateT g (SharedStateListT s Identity) a
---   g -> SharedStateListT s Identity (a,g)
---   g -> s -> Identity [((a,g),s)]    (more or less)
---   g -> s -> [((a,g),s)]
-
 alpha :: (Lattice s, Ord a, Ord g) =>
-        ℙ ((PΣ a, g), s) -> (ℙ (PΣ a, g), s)
+        ℙ ((a, g), s) -> (ℙ (a, g), s)
 alpha = joinWith (\((p, g), s) -> (Set.singleton (p,g), s))
 
 gamma :: (Ord a, Ord g, Ord s) =>
-        (ℙ (PΣ a, g), s) -> ℙ ((PΣ a, g), s)
+        (ℙ (a, g), s) -> ℙ ((a, g), s)
 gamma (states, s) = Set.map (\(p, g) -> ((p,g), s)) states
 
 instance (Ord g, Ord a, Lattice s, StoreLike a s (D a), Ord s, HasInitial g) =>

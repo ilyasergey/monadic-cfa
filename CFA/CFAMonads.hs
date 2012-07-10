@@ -126,11 +126,6 @@ askSSLT = do env <- lift ask
 localSSLT :: (Lattice s, MonadReader env m) => (env -> env) -> SharedStateListT s m v -> SharedStateListT s m v
 localSSLT f m = mapSharedState (local f) m
 
--- instance (Lattice s, MonadReader env m) =>
---          MonadReader env (SharedStateListT s m) where
---   ask = askSSLT
---   local = localSSLT
-
 pureND :: MonadPlus m => [a] -> m a
 pureND = msum . List.map return
 
@@ -158,3 +153,6 @@ liftTup (ma,b) = liftM (flip (,) b) ma
 
 joinWith :: (Foldable t, Lattice a) => (b -> a) -> t b -> a
 joinWith f = Foldable.foldr ((⊔) . f) bot
+
+type StorePassingSemantics s g = StateT g (StateT s (ListT Identity))
+

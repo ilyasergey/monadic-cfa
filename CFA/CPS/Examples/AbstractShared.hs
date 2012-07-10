@@ -12,7 +12,7 @@ import CFA.CFAMonads
 import CFA.Lattice
 import CFA.Store
 import CFA.CPS.Analysis
-import CFA.CPS.Analysis.Runner
+import CFA.Runner
 import CFA.CPS.Analysis.SingleStore
 
 ----------------------------------------------------------------------
@@ -43,11 +43,6 @@ instance KCFA KTime where
 
 
 type AbstractGutsSS = (ProcCh KAddr, KTime)
-
--- abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)
--- abstractResultSSC e = snd $ snd go 
---   where go :: ([()], (Store KAddr, (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)))
---         go = runIdentity $ runSSListT0 $ runReaderT (explore e) initialGutsSS
 
 abstractResultSSC :: CExp -> (Set (PΣ KAddr, AbstractGutsSS), Store KAddr)
 abstractResultSSC e = exploreFP mnext (e, ρ0)

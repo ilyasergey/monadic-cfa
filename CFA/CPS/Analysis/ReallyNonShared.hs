@@ -29,18 +29,11 @@ import CFA.Lattice
 import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
-import CFA.CPS.Analysis.Runner
+import CFA.Runner
 
 import Util
 
 type ReallyNonSharedAnalysis s g = StateT g (StateT s (ListT Identity))
-
--- ReallyNonSharedAnalysis s g a =
---   StateT g (StateT s (ListT Identity)) a
---   g -> StateT s (ListT Identity) (a, g)
---   g -> s -> ListT Identity ((a, g), s)
---   g -> s -> Identity [((a, g), s)]    (more or less :))
---   g -> s -> [((a, g), s)]
 
 instance (Addressable a t, StoreLike a s (D a)) 
   => Analysis (ReallyNonSharedAnalysis s (ProcCh a, t)) a
@@ -69,12 +62,8 @@ instance (Lattice s, Eq a, StoreLike a s (D a), Ord a) =>
 initialGuts :: Addressable a t => (ProcCh a, t)
 initialGuts = (Nothing, τ0) 
 
-class HasInitial g where
-  initial :: g
-
 instance Addressable a t => HasInitial (ProcCh a, t) where
   initial = initialGuts
-
   
 newtype RNSFP a g s = RNSFP { unRNSFP :: ℙ ((PΣ a, g), s) } deriving (Lattice)
 

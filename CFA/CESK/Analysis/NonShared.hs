@@ -12,9 +12,15 @@ module CFA.CESK.Analysis.NonShared where
 
 import Data.Map as Map
 import Data.Set as Set
+import Data.List as List
+
+import Control.Monad.State
+import Control.Monad.ListT
+import Control.Monad.Identity
 
 import CFA.Lattice
 import CFA.CFAMonads
+import CFA.Runner
 import CFA.Store
 
 import CFA.CESK
@@ -25,55 +31,43 @@ import CFA.CESK.Analysis
 ----------------------------------------------------------------------  
 
 type D a = ℙ (Storable a)
+type NDStore a = a :-> (D a)
 
-instance (StoreLike Addr s (D Addr), Truncatable Time) 
-   => Analysis (GenericAnalysis)
-               Addr                        -- address type
-               ()                          -- no shared result
-               (Time, State Addr, s)       -- Generic Analysis' guts
-               where
-  tick ctx@(Ref (_, _), ρ, a) = GCFA (\(t, s, σ) -> [((), (t, ctx, σ))])
-  tick ctx@(App (_, _, l), ρ, a) = GCFA (\(t, s, σ) -> [((), (TLab l (contour t), ctx, σ))])
-  tick ctx@(v, ρ, a) = GCFA (\(t, s, σ) -> case t of 
-                       TLab l ctr -> [case κ of 
-                                      Mt   -> ((), (trunc $ TMt (l : ctr), ctx, σ))
-                                      Ar _ -> ((), (TLab l ctr, ctx, σ))
-                                      Fn _ -> ((), (trunc $ TMt (l : ctr), ctx, σ)) 
-                                      | Cont κ <- Set.toList $ fetch σ a]
-                       _          -> [((), (t, ctx, σ))])
+instance (StoreLike Addr s (D Addr), Truncatable Time) => 
+         Analysis (StorePassingSemantics s (Time, PState Addr)) Addr where
 
-  getVar ρ x   = GCFA (\(t, s, σ) -> 
-                  let clos = fetch σ (ρ ! x)
-                   in [(clo, (t, s, σ)) | Val clo <- Set.toList clos])
+  tick ctx@(Ref (_, _), ρ, a) = modify $ \(t, _) -> (t, ctx)    
+  tick ctx@(App (_, _, l), ρ, a) = modify $ \(t, _) -> (TLab l (contour t), ctx)
+  tick ctx@(v, ρ, a) = do (t, s) <- get
+                          σ      <- lift get
+                          case t of 
+                            TLab l ctr -> 
+                              let ts = [case κ of 
+                                          Mt   -> (TMt (l:ctr), ctx)
+                                          Ar _ -> (TLab l ctr, ctx)
+                                          Fn _ -> (TMt (l:ctr), ctx)
+                                       | Cont κ <- Set.toList $ fetch σ a]
+                               in mapM put ts >> return ()            
+                            _          -> return ()
 
-  putVar ρ x b c = GCFA (\(t, s, σ) -> do
-                  let d  = (Set.singleton (Val c))
-                      σ' = bind σ b d
-                      ρ' = ρ // [(x, b)]
-                  return (ρ', (t, s, σ')))
+  getVar ρ x = lift $ getsNDSet $ (\σ -> Set.map (\(Val c) -> c) $ 
+                                                 fetch σ (ρ ! x))
 
-  loadCont a   = GCFA (\(t, s, σ) -> 
-                  let ks = fetch σ a
-                   in [(κ, (t, s, σ)) | Cont κ <- Set.toList ks])
+  putVar ρ x b c = (lift $ modify $ \σ -> bind σ b $ Set.singleton $ Val c) >> 
+                   (return $ ρ // [(x, b)])
 
-  storeCont b κ  = GCFA (\(t, s, σ) -> do
-                  let d  = (Set.singleton (Cont κ))
-                      σ' = bind σ b d
-                  return ((), (t, s, σ')))
+  loadCont a  = lift $ getsNDSet (\σ -> Set.map (\(Cont κ) -> κ) $ 
+                                                fetch σ a)
 
-  alloc _       = GCFA (\(t, s, σ) -> do
-                  [(a, (t, s, σ)) | a <- allocKCFA t s σ])
+  storeCont b κ = lift $ modify $ \σ -> bind σ b $ Set.singleton (Cont κ)
 
-  stepAnalysis _ config state = ((), gf (mstep state) config)
-
-  inject call = let initState = (call, Map.empty, Call "mt" [])
-                 in (initState, (), (TMt [], initState, σ0))
-
-
+  alloc _       =  do (t, s) <- get
+                      σ      <- lift get
+                      pureND $ allocKCFA t s σ 
 
 -- abstract allocator function
 -- nondeterministic because of stored continuations
-allocKCFA :: StoreLike Addr s (D Addr) => Time -> State Addr -> s -> [Addr]
+allocKCFA :: StoreLike Addr s (D Addr) => Time -> PState Addr -> s -> [Addr]
 allocKCFA t (App (e0, _, _), _ ,_) σ = [Call (lab e0) (contour t)]
 allocKCFA t (Lam _, _, a) σ = 
       [case κ of
@@ -81,14 +75,24 @@ allocKCFA t (Lam _, _, a) σ =
             Fn ((x, _), _, _) -> Bind x (contour t) 
        | Cont κ <- Set.toList $ fetch σ  a]
 
-instance GarbageCollector (GenericAnalysis () (Time, State Addr, s)) (State Addr)
-
-type Store a = a :-> (D a)
-
-instance StoreLike Addr (Store Addr) (D Addr) where
+instance StoreLike Addr (NDStore Addr) (D Addr) where
  σ0 = Map.empty  
  bind σ a d = σ ⨆ [a ==> d]
  fetch σ a = σ CFA.Lattice.!! a  
  replace σ a d = σ ⨆ [a ==> d]
  filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
 
+
+---------------------------------------------------------------
+-- Runner                                                    --
+---------------------------------------------------------------
+instance (Ord s, StoreLike Addr s (D Addr), Truncatable Time) => 
+         AddStepToFP (StorePassingSemantics s (Time, PState Addr))
+                     (PState Addr)
+                     (Set (PState Addr, Time, s)) where
+  applyStep step =
+    joinWith 
+      (\(p, t, σ) -> Set.fromList $ List.map (\((a, (b, c)), d) -> (a, b, d)) $
+                            runIdentity $
+                            collectListT (runStateT (runStateT (step p) (t, p)) σ))
+  inject p = Set.singleton $ (p, initial, σ0)

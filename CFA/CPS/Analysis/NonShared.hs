@@ -28,7 +28,7 @@ import CFA.Lattice
 import CFA.Store
 import CFA.CFAMonads
 import CFA.CPS.Analysis
-import CFA.CPS.Analysis.Runner
+import CFA.Runner
 
 import Util
 

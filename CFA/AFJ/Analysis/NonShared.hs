@@ -13,10 +13,13 @@ module CFA.AFJ.Analysis.NonShared where
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as L
+import Control.Monad.State
+import Control.Monad.ListT
+import Control.Monad.Identity
 
 import CFA.Lattice
+import CFA.Runner
 import CFA.CFAMonads
-import CFA.CPS.Analysis.NonShared
 import CFA.Store
 
 import CFA.AFJ
@@ -27,61 +30,52 @@ import CFA.AFJ.Analysis
 ----------------------------------------------------------------------  
 type D a = ℙ (Storable a)
 
-instance (StoreLike Addr s (D Addr), Truncatable Time) 
-   => Analysis (GenericAnalysis s (ProcCh Addr, Time))
-               Addr                        -- address type
-               ()                          -- no shared result
-               (Time, s)                   -- Generic Analysis' guts
-               where
-  tick ctx@(stmts, _, _) = GCFA (\(t, σ) -> [((), (trunc ((lab (head stmts)):t), σ))])
-  
-  getObj β v = GCFA (\(t, σ) -> 
-               [(d, (t, σ)) | Val d <- Set.toList $ fetch σ (β!v)])
+instance (StoreLike Addr s (D Addr), Truncatable Time) => 
+         Analysis (StorePassingSemantics s Time) Addr where
 
-  putObj β v d = GCFA (\(t, σ) -> 
-                 let σ' = bind σ  (β!v) (Set.singleton (Val d))
-                  in [((), (t, σ'))])
+  tick ctx@(stmts, _, _) = modify $ \t -> trunc ((lab (head stmts)):t)
 
-  getCont pk = GCFA (\(t, σ) -> 
-               [(κ, (t, σ)) | Cont κ <- Set.toList $ fetch σ pk])
+  getObj β v = lift $ getsNDSet $ \σ -> Set.map (\(Val d) -> d) $ fetch σ (β!v)
 
-  putCont m κ = GCFA (\(t, σ) -> 
-                let b = alloc_k t m 
-                    σ' = bind σ b $ Set.singleton (Cont κ)
-                 in [(b, (t, σ'))])
+  putObj β v d = lift $ modify $ \σ -> bind σ  (β!v) (Set.singleton (Val d))
 
-  initBEnv β vs'' vs''' = GCFA (\(t, σ) -> 
-                           let pairs' = L.map (\v -> (v, alloc t v)) vs''
-                               pairs'' = L.map (\v -> (v, alloc t v)) vs'''
-                               β' = β // pairs' // pairs'' in
-                           [(β', (t, σ))])
+  getCont pk = lift $ getsNDSet $ \σ -> Set.map (\(Cont κ) -> κ) $ fetch σ pk
 
-  getConstr table cn  = GCFA (\(t, σ) ->  
+  putCont m κ = do t <- get
+                   let b = alloc_k t m 
+                   lift $ modify $ \σ -> bind σ b $ Set.singleton (Cont κ)
+                   return b
+
+  initBEnv β vs'' vs''' = do t <- get 
+                             let pairs' = L.map (\v -> (v, alloc t v)) vs''
+                                 pairs'' = L.map (\v -> (v, alloc t v)) vs'''
+                             return $ β // pairs' // pairs''
+
+  getConstr table cn  
+    = do t <- get
+         σ <- lift get
              -- updates a store and returns an environment of all class fields
-             let ructor = (\ds -> GCFA(\(t', σ') -> 
-                   let fs = allFields table cn -- compute all fields
-                       as = L.map (alloc t) fs    -- appropriate addresses for fields
-                       fBindings = zip fs as    -- bindings [field |-> addr]
-                       -- mapping from all class fields to provided arguments
-                       fMappings = Map.empty // classFieldMappings table cn ds 
-                       -- heap is updated according to the mappings
-                       pairs = [(ai, Set.singleton (Val $ fMappings ! fi)) | (fi, ai) <- fBindings] 
-                       σ'' = foldl (\store (ai, di) -> bind store ai di) σ' pairs
-                       -- new environment is create
-                       β' = Map.empty // fBindings
-                    in [(β', (t', σ''))]))
-             in [(ructor, (t, σ))])
+         return (\ds -> 
+                  do σ' <- lift get 
+                     let fs = allFields table cn -- compute all fields
+                         as = L.map (alloc t) fs    -- appropriate addresses for fields
+                         fBindings = zip fs as    -- bindings [field |-> addr]
+                         -- mapping from all class fields to provided arguments
+                         fMappings = Map.empty // classFieldMappings table cn ds 
+                         -- heap is updated according to the mappings
+                         pairs = [(ai, Set.singleton (Val $ fMappings ! fi)) 
+                                 | (fi, ai) <- fBindings] 
+                         σ'' = L.foldl (\store (ai, di) -> bind store ai di) σ' pairs
+                         -- new environment is create
+                         β' = Map.empty // fBindings
+                     lift $ modify (\_ -> σ'')
+                     return β') 
 
-  getMethod table (cn, _) m = GCFA (\(t, σ) -> [(method table cn m, (t, σ))])
+  getMethod table (cn, _) m = return $ method table cn m
 
-  stepAnalysis table _ config state = ((), gf (mstep table state) config)
-
-  inject vars stmts = let t0 = [] 
-                          as = L.map (alloc t0) vars
-                          varBinds = L.zip vars as
-                          a0 = ACall "main" []
-                       in ((stmts, Map.empty // varBinds, a0), (), ([], σ0))
-
+----------------------------------------------------------------------------
+-- Store machinery
+----------------------------------------------------------------------------
 
 alloc :: (Truncatable Time) => Time -> Var -> Addr
 alloc t v = AVar v $ trunc t
@@ -97,3 +91,28 @@ instance StoreLike Addr (Store Addr) (D Addr) where
  fetch σ a = σ CFA.Lattice.!! a  
  replace σ a d = σ ⨆ [a ==> d]
  filterStore σ p = Map.filterWithKey (\k -> \v -> p k) σ
+
+----------------------------------------------------------------------------
+-- Runner machinery
+----------------------------------------------------------------------------
+
+instance (Ord s, StoreLike Addr s (D Addr), Truncatable Time) => 
+         AddStepToFP (StorePassingSemantics s Time)
+                     (PState Addr)
+                     (Set (PState Addr, Time, s)) where
+  applyStep step =
+    joinWith 
+      (\(p, t, σ) -> Set.fromList $ L.map (\((a, b), c) -> (a, b, c)) $
+                            runIdentity $
+                            collectListT (runStateT (runStateT (step p) t) σ))
+  inject p = Set.singleton $ (p, initial, σ0)
+
+----------------------------------------------------------------------------
+-- Utility function to inject variables and stamtement to state          --
+----------------------------------------------------------------------------
+injectToState :: [Var] -> [Stmt] -> PState Addr
+injectToState vars stmts = let t0 = [] 
+                               as = L.map (alloc t0) vars
+                               varBinds = L.zip vars as
+                               a0 = ACall "main" []
+                            in (stmts, Map.empty // varBinds, a0)

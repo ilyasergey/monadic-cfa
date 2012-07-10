@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
@@ -15,6 +16,7 @@ import Data.List as L
 
 import CFA.Lattice
 import CFA.Store
+import CFA.Runner
 
 import CFA.AFJ
 
@@ -25,7 +27,7 @@ import CFA.AFJ
 -- a - for addresses
 type BEnv a = Var :-> a
 type Kont a = (Var, [Stmt], BEnv a, a)
-type State a = ([Stmt], BEnv a, a)
+type PState a = ([Stmt], BEnv a, a)
 type Obj a = (ClassName, BEnv a)
 
 class (Eq a, Ord a) => Address a
@@ -46,25 +48,31 @@ type Time = [Lab]
 
 instance Address Addr
 
+instance HasInitial Time where
+  initial = []
+
+instance Truncatable Time where
+  trunc ls = take 1 ls
+
 ---------------------------------------------------------------------  
 -- Abstract analysis interface.
 ----------------------------------------------------------------------  
 
 -- Hint: Add new primitives as they appear in the semantics
-class Monad (m s g) => Analysis m a s g | g -> m, m -> s, g -> a where
-  tick           :: State a -> m s g ()
-  getObj         :: BEnv a -> Var -> m s g (Obj a)
-  putObj         :: BEnv a -> Var -> Obj a -> m s g ()
-  getCont        :: a -> m s g (Kont a)
-  putCont        :: MethodName -> (Kont a) -> m s g a
-  getConstr      :: ClassTable -> ClassName -> m s g ([Obj a] -> m s g (BEnv a))
-  getMethod      :: ClassTable -> Obj a -> MethodName -> m s g Method
-  initBEnv       :: BEnv a -> [Var] -> [Var] -> m s g (BEnv a)
+class Monad m => Analysis m a | m -> a where
+  tick           :: PState a -> m ()
+  getObj         :: BEnv a -> Var -> m (Obj a)
+  putObj         :: BEnv a -> Var -> Obj a -> m ()
+  getCont        :: a -> m (Kont a)
+  putCont        :: MethodName -> (Kont a) -> m a
+  getConstr      :: ClassTable -> ClassName -> m ([Obj a] -> m (BEnv a))
+  getMethod      :: ClassTable -> Obj a -> MethodName -> m Method
+  initBEnv       :: BEnv a -> [Var] -> [Var] -> m (BEnv a)
 
-  stepAnalysis   :: ClassTable -> s -> g -> State a -> (s, [(State a, g)])
-  inject         :: [Var] -> [Stmt] -> (State a, s, g)
+  -- stepAnalysis   :: ClassTable -> s -> g -> PState a -> (s, [(PState a, g)])
+  -- inject         :: [Var] -> [Stmt] -> (PState a, s, g)
 
-mstep :: (Analysis m a s g) => ClassTable -> State a -> m s g (State a)
+mstep :: Analysis m a => ClassTable -> PState a -> m (PState a)
 mstep table ctx@((Asgn v v' l):succ, β, pk) = do
       tick ctx
       d <- getObj β v'
@@ -110,3 +118,11 @@ mstep table ctx@((MCall v v0 mthd vs l):succ, β, pk) = do
       return $! (body, β'', pk')     
 -- final state
 mstep _ c@([], _ , _) = return c
+
+----------------------------------------------------------------------
+ -- Running the analysis
+----------------------------------------------------------------------
+
+runAnalysis :: (Lattice fp , AddStepToFP m (PState a) fp, Analysis m a) =>
+               ClassTable -> PState a -> fp
+runAnalysis ct p = exploreFP (mstep ct) p

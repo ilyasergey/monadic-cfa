@@ -14,6 +14,7 @@ import Data.Set as Set
 
 import CFA.Lattice
 import CFA.Store
+import CFA.Runner
 
 {---------------- SYNTAX AND STATE-SPACE ----------------}
 
@@ -24,7 +25,7 @@ type Var = String
 type Lab = String
 type Env a = Var :-> a
 type Lambda = (Var, Exp)
-type State a = (Exp, Env a, a)
+type PState a = (Exp, Env a, a)
 
 data Exp = Ref (Var, Lab)
          | App (Exp, Exp, Lab)
@@ -42,7 +43,6 @@ data Kont a = Mt
 data Storable a  = Val (Clo a)
                  | Cont (Kont a)
   deriving (Eq, Ord, Show)
-
 
 
 -- retrieve a label
@@ -69,4 +69,14 @@ instance Address Addr
 contour :: Time -> [Lab]
 contour (TLab _ c) = c
 contour (TMt c) = c
+
+instance HasInitial Time where
+  initial = TMt []
+
+instance Truncatable Time where
+  trunc (TMt (lab:ls)) = TMt ls
+  trunc t = t
+
+instance HasInitial Addr where
+  initial = Call "mt" []
 

@@ -5,9 +5,7 @@ import Data.Set as Set
 import Data.List as List
 
 import CFA.CPS
---import CFA.Lattice
 import CFA.CPS.Analysis
---import CFA.CPS.Analysis.Runner
 import CFA.CPS.Analysis.Interpreter
 
 ----------------------------------------------------------------------

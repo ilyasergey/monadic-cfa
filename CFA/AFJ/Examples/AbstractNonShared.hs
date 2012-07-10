@@ -9,7 +9,7 @@ import Data.List as List
 import CFA.Store
 import CFA.AFJ
 import CFA.AFJ.Analysis
-import CFA.AFJ.Analysis.Runner
+import CFA.Runner
 
 ----------------------------------------------------------------------
 -- abstract interpreter with a per-state store
@@ -74,10 +74,8 @@ mainStmts = [ New "mainB" "B" [] "l3"
 
 ----------------------------------------------------------------------
 
-instance Truncatable Time where
-  trunc ls = take 1 ls
+abstractResult :: ClassTable -> [Var] -> [Stmt] -> Set (PState Addr, Time, Store Addr)
+abstractResult ct vars stmts = runAnalysis ct (injectToState vars stmts) 
 
-type AbstractGuts = (Time, Store Addr)
-
-abstractResult :: [Var] -> [Stmt] -> ClassTable -> ((), Set (State Addr, AbstractGuts))
-abstractResult = explore 
+-- Try:
+-- abstractResult ctable mainVars mainStmts

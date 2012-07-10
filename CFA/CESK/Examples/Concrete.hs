@@ -5,9 +5,10 @@ import Data.Set as Set
 import Data.List as List
 
 import CFA.Store
+import CFA.Runner
+
 import CFA.CESK
 import CFA.CESK.Analysis
-import CFA.CESK.Analysis.Runner
 
 ----------------------------------------------------------------------
 -- abstract interpreter with a per-state store
@@ -28,12 +29,5 @@ ex   = App (App (comb, idx, "l11"), idy, "l10")
 
 ----------------------------------------------------------------------
 
-instance Truncatable Time where
-  trunc (TMt (lab:ls)) = TMt ls
-  trunc t = t
-
-
-type ConcreteGuts = (Time, State Addr, Store Addr)
-
-concreteResult :: Exp -> ((), Set (State Addr, ConcreteGuts))
-concreteResult = explore 
+concreteResult :: Exp -> Set (PState Addr, Time, Store Addr)
+concreteResult = runAnalysis

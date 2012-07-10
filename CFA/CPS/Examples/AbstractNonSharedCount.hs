@@ -8,7 +8,7 @@ import CFA.CPS
 import CFA.Lattice
 import CFA.Store
 import CFA.CPS.Analysis
-import CFA.CPS.Analysis.Runner
+import CFA.Runner
 
 ----------------------------------------------------------------------
 -- abstract interpreter with a per-state store and counting
