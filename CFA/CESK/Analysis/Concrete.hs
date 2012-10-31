@@ -32,7 +32,7 @@ import CFA.CESK.Analysis
 
 type Store a = a :-> (Storable a)
 
-instance Analysis (StorePassingSemantics (Store Addr) (Time, PState Addr)) Addr where
+instance LambdaCESKInterface (StorePassingSemantics (Store Addr) (Time, PState Addr)) Addr where
 
   tick ctx@(Ref (_, _), ρ, a) = modify $ \(t, _) -> (t, ctx)
   tick ctx@(App (_, _, l), ρ, a) = modify $ \(t, _) -> (TLab l (contour t), ctx)

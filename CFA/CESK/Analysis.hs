@@ -19,7 +19,7 @@ import CFA.Runner
 ----------------------------------------------------------------------  
 -- Abstract analysis interface.
 ----------------------------------------------------------------------  
-class Monad m => Analysis m a | m -> a where 
+class Monad m => LambdaCESKInterface m a | m -> a where 
   tick      :: PState a -> m ()
   getVar    :: Env a -> Var -> m (Clo a)
   putVar    :: Env a -> Var -> a -> Clo a -> m (Env a)
@@ -33,7 +33,7 @@ class Monad m => Analysis m a | m -> a where
 ----------------------------------------------------------------------  
 -- Generic transition
 ----------------------------------------------------------------------  
-mstep :: (Analysis m a) => PState a -> m (PState a)
+mstep :: (LambdaCESKInterface m a) => PState a -> m (PState a)
 mstep ctx@(Ref (x, l), ρ, a) = do
   tick ctx
   Clo (v, ρ', l) <- getVar ρ x
@@ -61,6 +61,6 @@ mstep ctx@(Lam (v, l), ρ, a) = do
 ----------------------------------------------------------------------
 
 runAnalysis :: (Lattice fp , AddStepToFP m (PState a) fp, 
-                HasInitial a, Analysis m a) =>
+                HasInitial a, LambdaCESKInterface m a) =>
                Exp -> fp
 runAnalysis e = exploreFP mstep (e, Map.empty, initial)

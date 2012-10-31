@@ -20,7 +20,6 @@ import CFA.Runner
 
 -- `a' stands for the nature of addresses
 -- it is also a leaf of the state-space
-
 type Var = String
 type Lab = String
 type Env a = Var :-> a
@@ -43,7 +42,6 @@ data Kont a = Mt
 data Storable a  = Val (Clo a)
                  | Cont (Kont a)
   deriving (Eq, Ord, Show)
-
 
 -- retrieve a label
 lab :: Exp -> Lab

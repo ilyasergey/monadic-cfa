@@ -34,7 +34,7 @@ type D a = ℙ (Storable a)
 type NDStore a = a :-> (D a)
 
 instance (StoreLike Addr s (D Addr), Truncatable Time) => 
-         Analysis (StorePassingSemantics s (Time, PState Addr)) Addr where
+         LambdaCESKInterface (StorePassingSemantics s (Time, PState Addr)) Addr where
 
   tick ctx@(Ref (_, _), ρ, a) = modify $ \(t, _) -> (t, ctx)    
   tick ctx@(App (_, _, l), ρ, a) = modify $ \(t, _) -> (TLab l (contour t), ctx)
