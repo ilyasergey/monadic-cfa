@@ -7,6 +7,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module CFA.AFJ.Analysis where
 
@@ -106,7 +107,8 @@ mstep table ctx@((New v cn vs l):succ, β, pk) = do
 mstep table ctx@((MCall v v0 mthd vs l):succ, β, pk) = do
       tick ctx      
       d0 <- getObj β v0
-      (cn, _ , params, locals, body) <- getMethod table d0 mthd
+      (cn, _ , params, locals, body) 
+        <- getMethod table d0 mthd
       ds <- sequence [getObj β vi | vi <- vs]    
       let κ = (v, succ, β, pk)
       pk' <- putCont mthd κ

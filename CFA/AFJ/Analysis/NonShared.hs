@@ -33,45 +33,55 @@ type D a = ℙ (Storable a)
 instance (StoreLike Addr s (D Addr), Truncatable Time) => 
          AFJCESKInterface (StorePassingSemantics s Time) Addr where
 
-  tick ctx@(stmts, _, _) = modify $ \t -> trunc ((lab (head stmts)):t)
+  tick ctx@(stmts, _, _) = modify $ 
+                           \t -> trunc ((lab (head stmts)):t)
 
-  getObj β v = lift $ getsNDSet $ \σ -> Set.map (\(Val d) -> d) $ fetch σ (β!v)
+  getObj β v =  lift $ getsNDSet $ 
+                \σ -> Set.map (\(Val d) -> d) $ fetch σ (β!v)
 
-  putObj β v d = lift $ modify $ \σ -> bind σ  (β!v) (Set.singleton (Val d))
+  putObj β v d =  lift $ modify $ 
+                  \σ -> bind σ  (β!v) (Set.singleton (Val d))
 
-  getCont pk = lift $ getsNDSet $ \σ -> Set.map (\(Cont κ) -> κ) $ fetch σ pk
+  getCont pk =  lift $ getsNDSet $ 
+                \σ -> Set.map (\(Cont κ) -> κ) $ fetch σ pk
 
-  putCont m κ = do t <- get
-                   let b = alloc_k t m 
-                   lift $ modify $ \σ -> bind σ b $ Set.singleton (Cont κ)
-                   return b
-
-  initBEnv β vs'' vs''' = do t <- get 
-                             let pairs' = L.map (\v -> (v, alloc t v)) vs''
-                                 pairs'' = L.map (\v -> (v, alloc t v)) vs'''
-                             return $ β // pairs' // pairs''
-
-  getConstr table cn  
+  putCont m κ 
     = do t <- get
-         σ <- lift get
-             -- updates a store and returns an environment of all class fields
-         return (\ds -> 
-                  do σ' <- lift get 
-                     let fs = allFields table cn -- compute all fields
-                         as = L.map (alloc t) fs    -- appropriate addresses for fields
-                         fBindings = zip fs as    -- bindings [field |-> addr]
-                         -- mapping from all class fields to provided arguments
-                         fMappings = Map.empty // classFieldMappings table cn ds 
-                         -- heap is updated according to the mappings
-                         pairs = [(ai, Set.singleton (Val $ fMappings ! fi)) 
-                                 | (fi, ai) <- fBindings] 
-                         σ'' = L.foldl (\store (ai, di) -> bind store ai di) σ' pairs
-                         -- new environment is create
-                         β' = Map.empty // fBindings
-                     lift $ modify (\_ -> σ'')
-                     return β') 
+         let b = alloc_k t m 
+         lift $ modify $ \σ ->  bind σ b $ 
+                                Set.singleton (Cont κ)
+         return b
+
+  initBEnv β vs'' vs''' 
+    = do t <- get 
+         let pairs'   =  L.map (\v -> (v, alloc t v)) vs''
+             pairs''  =  L.map (\v -> (v, alloc t v)) vs'''
+         return $ β // pairs' // pairs''
 
   getMethod table (cn, _) m = return $ method table cn m
+
+  getConstr table cn  = do t <- get
+                           σ <- lift get
+                           -- updates a store and returns an environment of all class fields
+                           return $ createConstr table cn σ t
+
+createConstr table cn σ t ds =
+  do σ' <- lift get 
+     let fs = allFields table cn -- compute all fields
+         as = L.map (alloc t) fs    -- appropriate addresses for fields
+         fBindings = zip fs as    -- bindings [field |-> addr]
+         -- mapping from all class fields to provided arguments
+         fMappings = Map.empty // classFieldMappings table cn ds 
+         -- heap is updated according to the mappings
+         pairs = [(ai, Set.singleton (Val $ fMappings ! fi)) 
+                 | (fi, ai) <- fBindings] 
+         σ'' = L.foldl (\store (ai, di) -> bind store ai di) σ' pairs
+         -- new environment is created
+         β' = Map.empty // fBindings
+     lift $ modify (\_ -> σ'')
+     return β' 
+
+
 
 ----------------------------------------------------------------------------
 -- Store machinery
