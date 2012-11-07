@@ -26,7 +26,7 @@ import CFA.AFJ
 import CFA.AFJ.Analysis
 
 ----------------------------------------------------------------------  
--- ABSTRACT INTERPRETATION
+-- ABSTRACT INTERPRETATION 
 ----------------------------------------------------------------------  
 type D a = ℙ (Storable a)
 
