@@ -36,30 +36,37 @@ type NDStore a = a :-> (D a)
 instance (StoreLike Addr s (D Addr), Truncatable Time) => 
          LambdaCESKInterface (StorePassingSemantics s (Time, PState Addr)) Addr where
 
-  tick ctx@(Ref (_, _), ρ, a) = modify $ \(t, _) -> (t, ctx)    
-  tick ctx@(App (_, _, l), ρ, a) = modify $ \(t, _) -> (TLab l (contour t), ctx)
-  tick ctx@(v, ρ, a) = do (t, s) <- get
-                          σ      <- lift get
-                          case t of 
-                            TLab l ctr -> 
-                              let ts = [case κ of 
-                                          Mt   -> (TMt (l:ctr), ctx)
-                                          Ar _ -> (TLab l ctr, ctx)
-                                          Fn _ -> (TMt (l:ctr), ctx)
-                                       | Cont κ <- Set.toList $ fetch σ a]
-                               in mapM put ts >> return ()            
-                            _          -> return ()
+  tick ctx@(Ref (_, _), ρ, a) 
+    = modify $ \(t, _) -> (t, ctx)    
+  tick ctx@(App (_, _, l), ρ, a) 
+    = modify $ \(t, _) -> (TLab l (contour t), ctx)
+  tick ctx@(v, ρ, a) 
+    = do (t, s) <- get
+         σ      <- lift get
+         case t of 
+          TLab l ctr -> 
+           let ts = [case κ of 
+                      Mt   -> (TMt (l:ctr), ctx)
+                      Ar _ -> (TLab l ctr, ctx)
+                      Fn _ -> (TMt (l:ctr), ctx)
+                      | Cont κ <- Set.toList $ fetch σ a]
+           in mapM put ts >> return ()            
+          _          -> return ()
 
-  getVar ρ x = lift $ getsNDSet $ (\σ -> Set.map (\(Val c) -> c) $ 
-                                                 fetch σ (ρ ! x))
+  getVar ρ x 
+    = lift $ getsNDSet $ (\σ -> Set.map (\(Val c) -> c) $ 
+                                fetch σ (ρ ! x))
 
-  putVar ρ x b c = (lift $ modify $ \σ -> bind σ b $ Set.singleton $ Val c) >> 
-                   (return $ ρ // [(x, b)])
+  putVar ρ x b c 
+     = (lift $ modify $ \σ -> bind σ b $ Set.singleton $ Val c) >> 
+       (return $ ρ // [(x, b)])
 
-  loadCont a  = lift $ getsNDSet (\σ -> Set.map (\(Cont κ) -> κ) $ 
+  loadCont a  
+     = lift $ getsNDSet (\σ -> Set.map (\(Cont κ) -> κ) $ 
                                                 fetch σ a)
 
-  storeCont b κ = lift $ modify $ \σ -> bind σ b $ Set.singleton (Cont κ)
+  storeCont b κ 
+     = lift $ modify $ \σ -> bind σ b $ Set.singleton (Cont κ)
 
   alloc _       =  do (t, s) <- get
                       σ      <- lift get
@@ -67,8 +74,10 @@ instance (StoreLike Addr s (D Addr), Truncatable Time) =>
 
 -- abstract allocator function
 -- nondeterministic because of stored continuations
-allocKCFA :: StoreLike Addr s (D Addr) => Time -> PState Addr -> s -> [Addr]
-allocKCFA t (App (e0, _, _), _ ,_) σ = [Call (lab e0) (contour t)]
+allocKCFA ::  StoreLike Addr s (D Addr) => 
+              Time -> PState Addr -> s -> [Addr]
+allocKCFA t (App (e0, _, _), _ ,_) σ 
+  = [Call (lab e0) (contour t)]
 allocKCFA t (Lam _, _, a) σ = 
       [case κ of
             Ar (e, _, _)      -> Call (lab e) (contour t)

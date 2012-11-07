@@ -31,7 +31,7 @@ import CFA.AFJ.Analysis
 type D a = ℙ (Storable a)
 
 instance (StoreLike Addr s (D Addr), Truncatable Time) => 
-         Analysis (StorePassingSemantics s Time) Addr where
+         AFJCESKInterface (StorePassingSemantics s Time) Addr where
 
   tick ctx@(stmts, _, _) = modify $ \t -> trunc ((lab (head stmts)):t)
 

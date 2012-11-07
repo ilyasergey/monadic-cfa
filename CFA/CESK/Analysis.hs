@@ -21,12 +21,12 @@ import CFA.Runner
 ----------------------------------------------------------------------  
 class Monad m => LambdaCESKInterface m a | m -> a where 
   tick      :: PState a -> m ()
+  alloc     :: () -> m a
   getVar    :: Env a -> Var -> m (Clo a)
   putVar    :: Env a -> Var -> a -> Clo a -> m (Env a)
   loadCont  :: a -> m (Kont a)
   storeCont :: a -> Kont a -> m ()
-  alloc     :: () -> m a
-
+  
 -- A small-step monadic semantics for CESK* machine
 -- in Store- and Time- passing style
 

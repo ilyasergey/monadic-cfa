@@ -59,20 +59,20 @@ instance Truncatable Time where
 ----------------------------------------------------------------------  
 
 -- Hint: Add new primitives as they appear in the semantics
-class Monad m => Analysis m a | m -> a where
-  tick           :: PState a -> m ()
-  getObj         :: BEnv a -> Var -> m (Obj a)
-  putObj         :: BEnv a -> Var -> Obj a -> m ()
-  getCont        :: a -> m (Kont a)
-  putCont        :: MethodName -> (Kont a) -> m a
-  getConstr      :: ClassTable -> ClassName -> m ([Obj a] -> m (BEnv a))
-  getMethod      :: ClassTable -> Obj a -> MethodName -> m Method
-  initBEnv       :: BEnv a -> [Var] -> [Var] -> m (BEnv a)
+class Monad m => AFJCESKInterface m a | m -> a where
+  tick           ::  PState a -> m ()
+  getObj         ::  BEnv a -> Var -> m (Obj a)
+  putObj         ::  BEnv a -> Var -> Obj a -> m ()
+  getCont        ::  a -> m (Kont a)
+  putCont        ::  MethodName -> (Kont a) -> m a
+  getConstr      ::  ClassTable -> ClassName -> m ([Obj a] -> m (BEnv a))
+  getMethod      ::  ClassTable -> Obj a -> MethodName -> m Method
+  initBEnv       ::  BEnv a -> [Var] -> [Var] -> m (BEnv a)
 
   -- stepAnalysis   :: ClassTable -> s -> g -> PState a -> (s, [(PState a, g)])
   -- inject         :: [Var] -> [Stmt] -> (PState a, s, g)
 
-mstep :: Analysis m a => ClassTable -> PState a -> m (PState a)
+mstep :: AFJCESKInterface m a => ClassTable -> PState a -> m (PState a)
 mstep table ctx@((Asgn v v' l):succ, β, pk) = do
       tick ctx
       d <- getObj β v'
@@ -123,6 +123,6 @@ mstep _ c@([], _ , _) = return c
  -- Running the analysis
 ----------------------------------------------------------------------
 
-runAnalysis :: (Lattice fp , AddStepToFP m (PState a) fp, Analysis m a) =>
+runAnalysis :: (Lattice fp , AddStepToFP m (PState a) fp, AFJCESKInterface m a) =>
                ClassTable -> PState a -> fp
 runAnalysis ct p = exploreFP (mstep ct) p
