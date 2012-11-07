@@ -73,6 +73,7 @@ instance (StoreLike Addr s (D Addr), Truncatable Time) =>
 
   getMethod table (cn, _) m = return $ method table cn m
 
+
 ----------------------------------------------------------------------------
 -- Store machinery
 ----------------------------------------------------------------------------
