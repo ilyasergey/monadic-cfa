@@ -18,6 +18,7 @@ import Control.Monad.Reader
 -- abstract interpreter with a per-state store
 ----------------------------------------------------------------------
 
+import CFA.Store
 import CFA.CPS.KCFA
 import CFA.CPS.Analysis.NonShared
 import CFA.CPS.Analysis.ReallyNonShared

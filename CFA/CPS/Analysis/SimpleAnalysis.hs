@@ -33,6 +33,11 @@ import CFA.Runner
 
 import Util
 
+----------------------------------------------------------------------
+-- integer time-stamped concrete interpreter
+----------------------------------------------------------------------
+
+
 instance Analysis (StorePassingSemantics (Store Integer) Integer) Integer
               where
      fun ρ (Lam l) = return $ Clo(l, ρ)
@@ -47,6 +52,15 @@ instance Analysis (StorePassingSemantics (Store Integer) Integer) Integer
 
 instance HasInitial Integer where
   initial = 0
+
+instance (Ord a, StoreLike a s (D a))
+         => GarbageCollector (StorePassingSemantics s t) (PΣ a) where
+  gc ps = do
+    σ <- lift get
+    let rs = Set.map (\(v, a) -> a) (reachable ps σ)
+    lift $ modify $ \ σ -> filterStore σ (\a -> Set.member a rs)
+    return ()
+
 
 instance (Ord s, Ord a, Ord g, HasInitial g, Lattice s) =>
          AddStepToFP (StorePassingSemantics s g) a

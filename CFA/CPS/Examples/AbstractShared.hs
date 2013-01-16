@@ -16,7 +16,7 @@ import CFA.Runner
 import CFA.CPS.Analysis.SingleStore
 
 ----------------------------------------------------------------------
--- abstract interpreter with a single-threaded store
+-- abstract interpreter with a shared store
 ----------------------------------------------------------------------
 
 import CFA.CPS.KCFA
